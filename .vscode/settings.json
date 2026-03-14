@@ -1,0 +1,6 @@
+{
+  "python.terminal.activateEnvironment": true,
+  "python-envs.defaultEnvManager": "ms-python.python:venv",
+  "python.terminal.executeInFileDir": false,
+  "python.defaultInterpreterPath": "/Users/hmr/Desktop/AI/cs336/Assignment-1/.venv/bin/python"
+}
