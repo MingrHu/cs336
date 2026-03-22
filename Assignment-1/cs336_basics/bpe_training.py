@@ -5,7 +5,7 @@ PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s
 class MR_BPE:
 
     def __init__(self,input_path:str | os.PathLike,vocab_size:int,special_tokens:list[str]) -> None:
-        print("--------BPE init-------")
+        # print("--------BPE init-------")
         # 路径对象转为str
         input_path = str(input_path) 
         with open(input_path,"r",encoding = "utf-8") as f:
@@ -34,24 +34,27 @@ class MR_BPE:
         word_counts:dict[tuple[bytes,...],int] = {}
         # 获取以bytes格式的词元频率
         for part in docs:
+            # 按照实验的规则分割tokens
             tokens = re.findall(PAT, part)
             # tokens = part.split()
+            # print(tokens)
             for token in tokens:
                 text_bytes = token.encode("utf-8")
                 key = tuple(bytes([b]) for b in text_bytes)
                 word_counts[key] = word_counts.get(key, 0) + 1
                 
         self.dic = word_counts
+        # print(self.dic)
         return
     
     def get_pair(self):
         return
 
-    def find_max_freq(self,dic:dict[tuple[bytes,bytes],list[list[int]]])->tuple[bytes,bytes]:
+    def find_max_freq(self,dic:dict[tuple[bytes,bytes],dict[int,int]])->tuple[bytes,bytes]:
         max_freq = -1
         merge_rule:tuple[bytes,bytes] = (b"",b"")
         for k,v in dic.items():
-            sm = sum(j[1] for j in v)
+            sm = sum(v.values())
             if sm > max_freq:
                 max_freq = sm
                 merge_rule = k
@@ -71,49 +74,64 @@ class MR_BPE:
         # {['l','o','w']:5,['l','o','w','r']:2,......}
         # {lo:7, ow:7, we:8, er:2, wi:3, id:3, de:3, es:9, st:9, ne:6, ew:6}
         # {(l,o,w):5, (l,o,w,e,r):2, (w,i,d,e,st):3, (n,e,w,e,st):6}
-        print("-----Start to train bpe-----")
+        temp_dic:dict[tuple[bytes,bytes],dict[int,int]] = {}
+        idx_dic:dict[int,tuple[bytes,...]] = {}
+        idx_count:dict[int,int] = {}
+        idx = -1
+        for key_tuple,freq in self.dic.items():
+            idx += 1
+            if len(key_tuple) == 1:
+                continue
+            for i in range(len(key_tuple) - 1):
+                next_i = i + 1
+                merge_rule = (key_tuple[i],key_tuple[next_i])
+                # 添加当前cur对应的位置和idx索引 idx对应到具体的key_tuple i对应位置
+                temp_dic.setdefault(merge_rule,{}).setdefault(idx,0)
+                temp_dic.setdefault(merge_rule,{})[idx] += freq
+            # idx <--> key_tuple idx唯一映射到key_tuple 方便后续根据idx值找对应的key_tuple
+            idx_dic[idx] = idx_dic.get(idx,key_tuple)
+            idx_count[idx] = idx_count.get(idx,0) + freq
+        rounds = 0
+
+        # print("-----Start to train bpe-----")
         while True:
-            temp_dic:dict[tuple[bytes,bytes],list[list[int]]] = {}
-            idx_dic:dict[int,tuple[bytes,...]] = {}
-            idx = -1
-            for key_tuple,freq in self.dic.items():
-                idx += 1
-                if len(key_tuple) == 1:
-                    continue
-                for i in range(len(key_tuple) - 1):
-                    next_i = i + 1
-                    merge_rule = (key_tuple[i],key_tuple[next_i])
-                    # 添加当前cur对应的位置和idx索引 idx对应到具体的key_tuple
-                    temp_dic.setdefault(merge_rule,[]).append([idx,freq])
-                # idx <--> key_tuple idx唯一映射到key_tuple 方便后续根据idx值找对应的key_tuple
-                idx_dic[idx] = idx_dic.get(idx,key_tuple)
-        
             # 停止条件
             if len(temp_dic) == 0 or self.vocab_cur_size >= self.vocab_size:
                 break
             # 拿到最大的合并规则
             bi = self.find_max_freq(temp_dic)
             # 拿[idx,freq]的list
-            posItem = temp_dic.get(bi,[])
-            for pos_info in posItem:
-                # 可能会有多个相同的idx
-                idx,_ = pos_info
-                j = 0
-                tokens = idx_dic[idx]
+            posItem = temp_dic.get(bi,{})
+            idx_list = list(posItem.keys())
+            for idx in idx_list:
+                j,cnt = 0,idx_count[idx]
+                old_tokens = idx_dic[idx]
                 new_tokens:list[bytes] = []
-                while j < len(tokens):
-                    if j + 1 < len(tokens) and tokens[j] == bi[0] and tokens[j + 1] == bi[1]:
+
+                while j < len(old_tokens):
+                    if j + 1 < len(old_tokens) and old_tokens[j] == bi[0] and old_tokens[j + 1] == bi[1]:
                         new_tokens.append(bi[0] + bi[1])
                         j += 2
                     else:
-                        new_tokens.append(tokens[j])
+                        new_tokens.append(old_tokens[j])
                         j += 1
+                # check
+                for i in range(len(old_tokens) - 1):
+                    pair = (old_tokens[i],old_tokens[i + 1])
+                    temp_dic[pair][idx] -= cnt
+                    if temp_dic[pair][idx] == 0:
+                        temp_dic[pair].pop(idx)
+                        if len(temp_dic[pair]) == 0:
+                            temp_dic.pop(pair)
+                # new
+                for i in range(len(new_tokens) - 1):
+                    pair = (new_tokens[i],new_tokens[i + 1])
+                    temp_dic.setdefault(pair,{}).setdefault(idx,0)
+                    temp_dic.setdefault(pair,{})[idx] += cnt
                 new_key = tuple(new_tokens)
-                v = self.dic.get(tokens,None)
-                if v is None:
-                    continue
-                self.dic.pop(tokens)
-                self.dic[new_key] = v
+                idx_dic.pop(idx)
+                idx_dic[idx] = idx_dic.get(idx,new_key)
+
         # print(self.dic)
 
 
