@@ -1,15 +1,17 @@
 import regex as re
+import pickle
+import json
 import os
-# 
-PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+
+from utils import PAT,output_dir
+
 class MR_BPE:
 
     def __init__(self,input_path:str | os.PathLike,vocab_size:int,special_tokens:list[str]) -> None:
         # print("--------BPE init-------")
         # 路径对象转为str
         input_path = str(input_path) 
-        with open(input_path,"r",encoding = "utf-8") as f:
-            self.text = f.read()
+        self.input_path = input_path
         self.special_tokens = special_tokens
         self.vocab_size = vocab_size
         self.dic:dict[tuple[bytes,...],int] = {}
@@ -27,8 +29,10 @@ class MR_BPE:
             self.vocab_cur_size += 1
 
     def pre_process_text(self):
+        with open(self.input_path,"r",encoding = "utf-8") as f:
+            self.text = f.read()
+        # 参考实验手册 特殊token的匹配模式
         pattern:str = "|".join(map(re.escape,self.special_tokens))
-
         # 先按特殊token分为不同的text段落 一个段落有多个单词 分别以空格划分
         docs = re.split(pattern,self.text)
         word_counts:dict[tuple[bytes,...],int] = {}
@@ -140,8 +144,40 @@ class MR_BPE:
 
     def get_merges(self)->list[tuple[bytes,bytes]]:
         return self.merges
-        
 
+    #保存为可读的json文件
+    def serialize(self, vocab_filepath:str,merges_filepath:str):
+        if len(self.vocab) == 0 or len(self.merges) == 0:
+            return None
+        
+        vocab_data = {str(token_id): byte_str.hex() for token_id, byte_str in self.vocab.items() }
+        with open(vocab_filepath, "w", encoding="utf-8") as f:
+            json.dump(vocab_data, f, indent=2, ensure_ascii=False)
+
+        merges_data = [[a.hex(), b.hex()] for a, b in self.merges]
+        with open(merges_filepath, "w", encoding="utf-8") as f:
+            json.dump(merges_data, f, indent=2, ensure_ascii=False)
+    
+    # 从json文件中读取
+    def deserialize(self, vocab_filepath: str,merges_filepath: str,need_print = False):
+        with open(vocab_filepath, "r", encoding="utf-8") as f:
+            vocab_data = json.load(f)
+        with open(merges_filepath, "r", encoding="utf-8") as f:
+            merges_data = json.load(f)
+        self.vocab = {int(k): bytes.fromhex(v) for k, v in vocab_data.items()}
+        self.merges = [(bytes.fromhex(a), bytes.fromhex(b))for a, b in merges_data]
+        if need_print:
+            print(self.vocab)
+            print(self.merges)
+            
+
+def run_train_tiny_stories_bpe():
+    input_path =  "/home/humingrui/cs336/Assignment-1/data/TinyStoriesV2-GPT4-train.txt"
+    bpe = MR_BPE(input_path,10000,special_tokens = ["<|endoftext|>"])
+    bpe.pre_process_text()
+    bpe.train_bpe()
+    # 序列化到磁盘
+    bpe.serialize(f"{output_dir}/vocab.json",f"{output_dir}/merges.json")
 
 
 # def run_test_bpe():
@@ -152,5 +188,8 @@ class MR_BPE:
 #     print(bpe.get_vocab())
 #     print(bpe.get_merges())
 
-# if __name__ == '__main__':
-#     run_test_bpe()
+if __name__ == '__main__':
+    # run_train_tiny_stories_bpe()
+    bpe = MR_BPE("",10000,special_tokens = ["<|endoftext|>"])
+    
+    bpe.deserialize(f"{output_dir}/vocab.json",f"{output_dir}/merges.json",True)
