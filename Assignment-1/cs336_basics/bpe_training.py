@@ -3,7 +3,7 @@ import pickle
 import json
 import os
 
-from utils import PAT,output_dir
+from cs336_basics.utils import PAT,output_dir,current_dir
 
 class MR_BPE:
 
@@ -171,7 +171,7 @@ class MR_BPE:
             print(self.merges)
             
 
-def run_train_tiny_stories_bpe():
+def train_bpe_tinystories():
     input_path =  "/home/humingrui/cs336/Assignment-1/data/TinyStoriesV2-GPT4-train.txt"
     bpe = MR_BPE(input_path,10000,special_tokens = ["<|endoftext|>"])
     bpe.pre_process_text()
@@ -179,6 +179,13 @@ def run_train_tiny_stories_bpe():
     # 序列化到磁盘
     bpe.serialize(f"{output_dir}/vocab.json",f"{output_dir}/merges.json")
 
+
+def train_bpe_expts_owt():
+    input_path = "/home/humingrui/cs336/Assignment-1//data/owt_train.txt"
+    bpe = MR_BPE(input_path,32000,special_tokens = ["<|endoftext|>"])
+    bpe.pre_process_text()
+    bpe.train_bpe()
+    bpe.serialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_mergges.json")
 
 # def run_test_bpe():
 #     special_tokens = ["<|endoftext|>", "<|startoftext|>"]
@@ -190,6 +197,4 @@ def run_train_tiny_stories_bpe():
 
 if __name__ == '__main__':
     # run_train_tiny_stories_bpe()
-    bpe = MR_BPE("",10000,special_tokens = ["<|endoftext|>"])
-    
-    bpe.deserialize(f"{output_dir}/vocab.json",f"{output_dir}/merges.json",True)
+    train_bpe_expts_owt()

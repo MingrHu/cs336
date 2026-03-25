@@ -1,11 +1,11 @@
-import re
+import regex as re
 import json
 
 from typing import Iterable, Iterator
-from utils import PAT
+from cs336_basics.utils import PAT
 
 class MR_Tokenizer:
-    def __init__(self, vocab, merges, special_tokens:list[str] | None = None):
+    def __init__(self, vocab:dict[int,bytes], merges:list[tuple[bytes,bytes]], special_tokens:list[str] | None = None):
         """
         从给定的词汇表、合并规则列表和（可选的）特殊词元列表构建分词器
         参数：
@@ -13,12 +13,17 @@ class MR_Tokenizer:
             merges: list[tuple[bytes, bytes]]
             special_tokens: list[str] | None = None
         """
-        self.vacab = vocab
+        self.vocab = vocab
         self.merges = merges
+        self.dic_token_id:dict[bytes,int] = {}
         if special_tokens != None:
             self.special_tokens:list[str] = special_tokens
         else:
             self.special_tokens:list[str] = []
+        # token对id的映射
+        for id,token in vocab.items():
+            self.dic_token_id[token] = id
+        
 
     @classmethod
     def from_files(cls, vocab_filepath, merges_filepath, special_tokens:list[str] | None = None):
@@ -51,17 +56,48 @@ class MR_Tokenizer:
         if text == "":
             return []
         tokens:list[bytes] = []
-        pattern:str = "|".join(map(re.escape,self.special_tokens))
-        patrs = re.split(pattern,text)
+        parts:list[str] = []
+        # 特殊词元列表为空时不应该拆分文本
+        if self.special_tokens != []:
+            pattern:str = "|".join(map(re.escape,self.special_tokens))
+            parts = re.split(pattern,text)
+        else:
+            parts.append(text)
         # 把文本先预处理 拆分为每个token
-        for part in patrs:
+        for part in parts:
             passage = re.findall(PAT,part)
             for token in passage:
-                tokens.append(token)
-        
-        
-
-
+                tokens.append(token.encode("utf-8"))
+        ret:list[int] = []
+        # 需要按照生成的合并规则的顺序进行应用
+        # 复杂度 假设每个token的长度为k 有m个token 则复杂度为O(m*k2)
+        for token in tokens:
+            text_bytes = tuple(bytes([b]) for b in token)
+            while True:
+                max_level = len(self.vocab)
+                merge_rule:bytes = b""
+                for idx in range(len(text_bytes) - 1):
+                    pair = text_bytes[idx] + text_bytes[idx+1]
+                    if self.dic_token_id.get(pair) == None:
+                        continue
+                    if self.dic_token_id[pair] < max_level:
+                        max_level = self.dic_token_id[pair]
+                        merge_rule = pair
+                if merge_rule == b"":
+                    break
+                new_text_bytes:list[bytes] = []
+                j = 0
+                while j < len(text_bytes) - 1:
+                    if text_bytes[j] + text_bytes[j+1] == merge_rule:
+                        new_text_bytes.append(merge_rule)
+                        j += 2
+                    else:
+                        new_text_bytes.append(text_bytes[j])
+                        j += 1
+                text_bytes = tuple(new_text_bytes)
+            for b in text_bytes:
+                ret.append(self.dic_token_id[b])
+        return ret
 
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
@@ -69,7 +105,21 @@ class MR_Tokenizer:
         接收字符串可迭代对象（如Python文件句柄），返回一个生成器，惰性生成词元ID
         用于对无法直接加载到内存的大型文件进行内存高效的分词
         """
+        # 可以去了解一下python的迭代器类型
+        for it_str in iterable:
+            yield from self.encode(it_str)
 
     def decode(self, ids: list[int]) -> str:
         """将词元ID序列解码为文本"""
-       
+        ret:str = ""
+        for id in ids:
+            if id in self.vocab:
+                ret += self.vocab[id].decode("utf-8",errors = "replace")
+            else:
+                raise ValueError(f"Invalid token ID: {id}")
+        return ret
+
+if __name__ == "__main__":
+    tokenizer = MR_Tokenizer({},[])
+    tokenizer.encode("s")
+   
