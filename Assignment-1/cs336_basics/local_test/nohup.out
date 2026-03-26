@@ -4,3 +4,8 @@ Scalene execution interrupted.
 Scalene: profile saved to scalene-profile.json
   To view in browser:  scalene view
   To view in terminal: scalene view --cli
+ERROR:2026-03-26 22:13:36 615596:615596 DeviceProperties.cpp:47] gpuGetDeviceCount failed with code 35
+
+Scalene: profile saved to scalene-profile.json
+  To view in browser:  scalene view
+  To view in terminal: scalene view --cli
