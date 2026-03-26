@@ -150,7 +150,7 @@ class MR_BPE:
         if len(self.vocab) == 0 or len(self.merges) == 0:
             return None
         
-        vocab_data = {str(token_id): byte_str for token_id, byte_str in self.vocab.items() }
+        vocab_data = {str(token_id): byte_str.hex() for token_id, byte_str in self.vocab.items() }
         with open(vocab_filepath, "w", encoding="utf-8") as f:
             json.dump(vocab_data, f, indent=2, ensure_ascii=False)
 
@@ -170,33 +170,4 @@ class MR_BPE:
             print(self.vocab)
             print(self.merges)
             
-
-def train_bpe_tinystories():
-    input_path =  "/home/humingrui/cs336/Assignment-1/data/TinyStoriesV2-GPT4-train.txt"
-    bpe = MR_BPE(input_path,10000,special_tokens = ["<|endoftext|>"])
-    bpe.pre_process_text()
-    bpe.train_bpe()
-    # 序列化到磁盘
-    bpe.serialize(f"{output_dir}/vocab.json",f"{output_dir}/merges.json")
-
-
-def train_bpe_expts_owt():
-    input_path = "/home/humingrui/cs336/Assignment-1//data/owt_train.txt"
-    bpe = MR_BPE(input_path,32000,special_tokens = ["<|endoftext|>"])
-    # bpe.pre_process_text()
-    # bpe.train_bpe()
-    # bpe.serialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_mergges.json")
-    bpe.deserialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_mergges.json",need_print=False)
-
-# def run_test_bpe():
-#     special_tokens = ["<|endoftext|>", "<|startoftext|>"]
-#     bpe = MR_BPE("/Users/hmr/Desktop/AI/cs336/my_test.txt",10000,special_tokens)
-#     bpe.pre_process_text()
-#     bpe.train_bpe()
-#     print(bpe.get_vocab())
-#     print(bpe.get_merges())
-
-if __name__ == '__main__':
-    # run_train_tiny_stories_bpe()
-    train_bpe_expts_owt()
     
