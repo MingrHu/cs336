@@ -28,9 +28,15 @@ class MR_BPE:
             self.vocab[self.vocab_cur_size] = self.vocab.get(self.vocab_cur_size,bytes([i]))
             self.vocab_cur_size += 1
 
-    def pre_process_text(self):
-        with open(self.input_path,"r",encoding = "utf-8") as f:
-            self.text = f.read()
+    def pre_process_text(self,max_memory:int = 1 << 32):
+        # 文本 → 按特殊 token 切分成大段 → 每段用 PAT 抽词 → 每个词转 bytes 元组 → 统计词频 dict[tuple, int]
+        with open(self.input_path,"rb",encoding = "utf-8") as f:
+            f.seek(0,os.SEEK_END)
+            if f.tell() > max_memory:
+                self.__multiple_pre_process_text()
+            else:
+                self.text = f.read()
+                
         # 参考实验手册 特殊token的匹配模式
         pattern:str = "|".join(map(re.escape,self.special_tokens))
         # 先按特殊token分为不同的text段落 一个段落有多个单词 分别以空格划分
@@ -50,11 +56,8 @@ class MR_BPE:
         self.dic = word_counts
         # print(self.dic)
         return
-    
-    def get_pair(self):
-        return
 
-    def find_max_freq(self,dic:dict[tuple[bytes,bytes],dict[int,int]])->tuple[bytes,bytes]:
+    def __find_max_freq(self,dic:dict[tuple[bytes,bytes],dict[int,int]])->tuple[bytes,bytes]:
         max_freq = -1
         merge_rule:tuple[bytes,bytes] = (b"",b"")
         for k,v in dic.items():
@@ -71,6 +74,11 @@ class MR_BPE:
         self.vocab_cur_size += 1
         # print(f"max bi = {bi} and freq = {max_freq}")
         return merge_rule
+
+    def __multiple_pre_process_text(self):
+        
+    
+    def __handle_func(self):
 
         
     def train_bpe(self):
@@ -97,13 +105,12 @@ class MR_BPE:
             idx_count[idx] = idx_count.get(idx,0) + freq
         rounds = 0
 
-        # print("-----Start to train bpe-----")
         while True:
             # 停止条件
             if len(temp_dic) == 0 or self.vocab_cur_size >= self.vocab_size:
                 break
             # 拿到最大的合并规则
-            bi = self.find_max_freq(temp_dic)
+            bi = self.__find_max_freq(temp_dic)
             # 拿[idx,freq]的list
             posItem = temp_dic.get(bi,{})
             idx_list = list(posItem.keys())
@@ -169,5 +176,3 @@ class MR_BPE:
         if need_print:
             print(self.vocab)
             print(self.merges)
-            
-    
