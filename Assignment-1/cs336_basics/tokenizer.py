@@ -2,7 +2,7 @@ import regex as re
 import json
 
 from typing import Iterable, Iterator
-from cs336_basics.utils import PAT
+from utils import PAT
 
 class MR_Tokenizer:
     def __init__(self, vocab:dict[int,bytes], merges:list[tuple[bytes,bytes]], special_tokens:list[str] | None = None):

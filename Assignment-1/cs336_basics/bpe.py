@@ -1,9 +1,14 @@
 import regex as re
-import pickle
 import json
 import os
+import multiprocessing
 
-from cs336_basics.utils import PAT,output_dir,current_dir
+from typing import BinaryIO
+from utils import (PAT,output_dir,current_dir,
+    find_chunk_boundaries,
+    handle_func,
+    get_freq_dic
+)
 
 class MR_BPE:
 
@@ -18,6 +23,7 @@ class MR_BPE:
         self.merges:list[tuple[bytes,bytes]] = []
         self.vocab:dict[int,bytes] = {}
         self.vocab_cur_size = 0
+        self.text:str = ""
 
         # 初始化初始词汇表
         for idx,sp_token in enumerate(special_tokens):
@@ -30,32 +36,45 @@ class MR_BPE:
 
     def pre_process_text(self,max_memory:int = 1 << 32):
         # 文本 → 按特殊 token 切分成大段 → 每段用 PAT 抽词 → 每个词转 bytes 元组 → 统计词频 dict[tuple, int]
-        with open(self.input_path,"rb",encoding = "utf-8") as f:
+        with open(self.input_path,"rb") as f:
             f.seek(0,os.SEEK_END)
-            if f.tell() > max_memory:
-                self.__multiple_pre_process_text()
-            else:
+            size = f.tell()
+        if size > max_memory:
+            self.dic = self._multiple_pre_process_text() # type: ignore
+        else:
+            with open(self.input_path, "r", encoding="utf-8") as f:
                 self.text = f.read()
-                
-        # 参考实验手册 特殊token的匹配模式
-        pattern:str = "|".join(map(re.escape,self.special_tokens))
-        # 先按特殊token分为不同的text段落 一个段落有多个单词 分别以空格划分
-        docs = re.split(pattern,self.text)
-        word_counts:dict[tuple[bytes,...],int] = {}
-        # 获取以bytes格式的词元频率
-        for part in docs:
-            # 按照实验的规则分割tokens
-            tokens = re.findall(PAT, part)
-            # tokens = part.split()
-            # print(tokens)
-            for token in tokens:
-                text_bytes = token.encode("utf-8")
-                key = tuple(bytes([b]) for b in text_bytes)
-                word_counts[key] = word_counts.get(key, 0) + 1
-                
-        self.dic = word_counts
+            self.dic = get_freq_dic(self.text,self.special_tokens)
         # print(self.dic)
         return
+        
+    def _multiple_pre_process_text(self,num_processes:int = 4)->dict[tuple[bytes,...],int]:
+        q = multiprocessing.Queue()
+        process_ins:list[multiprocessing.Process] = []
+        ret:dict[tuple[bytes,...],int] = {}
+        boundaries:list[int] = []
+
+        with open(self.input_path, "rb") as f:
+            boundaries = find_chunk_boundaries(f,num_processes,[b.encode('utf-8') for b in self.special_tokens])
+
+        for start, end in zip(boundaries[:-1], boundaries[1:]):
+            p = multiprocessing.Process(
+                target = handle_func,
+                args =(self.input_path,start,end,self.special_tokens,q))
+            process_ins.append(p)
+            p.start()
+
+        size = len(process_ins)
+        print(f"---------共有{size}个进程运行，获得{size}个reduce-----------")
+        for idx in range(size):
+            print(f"🤔#####开始merge######🤓 当前处于第{idx + 1}个")
+            for k,v in q.get().items():
+                ret[k] = ret.get(k,0) + v
+
+        for p in process_ins:
+            p.join()
+        print(f"✅ map-reduce 结束 返回预处理freq词典")
+        return ret
 
     def __find_max_freq(self,dic:dict[tuple[bytes,bytes],dict[int,int]])->tuple[bytes,bytes]:
         max_freq = -1
@@ -74,14 +93,9 @@ class MR_BPE:
         self.vocab_cur_size += 1
         # print(f"max bi = {bi} and freq = {max_freq}")
         return merge_rule
-
-    def __multiple_pre_process_text(self):
-        
-    
-    def __handle_func(self):
-
         
     def train_bpe(self):
+        print("😎开始bpe训练 请等待......")
         # {low: 5, lower: 2, widest: 3, newest: 6}
         # {['l','o','w']:5,['l','o','w','r']:2,......}
         # {lo:7, ow:7, we:8, er:2, wi:3, id:3, de:3, es:9, st:9, ne:6, ew:6}
@@ -154,6 +168,7 @@ class MR_BPE:
 
     #保存为可读的json文件
     def serialize(self, vocab_filepath:str,merges_filepath:str):
+        print("👏👏👏 恭喜！开始序列化字典和合并规则到磁盘 请注意查收")
         if len(self.vocab) == 0 or len(self.merges) == 0:
             return None
         

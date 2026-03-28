@@ -1,10 +1,10 @@
 from cs336_basics.bpe import MR_BPE
-from cs336_basics.utils import output_dir
+from utils import output_dir,current_dir
 
 def train_bpe_tinystories():
-    input_path =  "/home/humingrui/cs336/Assignment-1/data/TinyStoriesV2-GPT4-train.txt"
+    input_path =  f"{current_dir}/data/TinyStoriesV2-GPT4-train.txt"
     bpe = MR_BPE(input_path,10000,special_tokens = ["<|endoftext|>"])
-    bpe.pre_process_text()
+    bpe.pre_process_text(10)
     bpe.train_bpe()
     # 序列化到磁盘
     bpe.serialize(f"{output_dir}/tiny_stories_vocab.json",f"{output_dir}/tiny_stories_merges.json")
