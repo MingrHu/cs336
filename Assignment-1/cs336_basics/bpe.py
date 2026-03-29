@@ -167,27 +167,37 @@ class MR_BPE:
         return self.merges
 
     #保存为可读的json文件
-    def serialize(self, vocab_filepath:str,merges_filepath:str):
+    @classmethod
+    def serialize(cls, vocab:dict[int, bytes],
+                  merges:list[tuple[bytes, bytes]],
+                  vocab_filepath:str,
+                  merges_filepath:str):
         print("👏👏👏 恭喜！开始序列化字典和合并规则到磁盘 请注意查收")
-        if len(self.vocab) == 0 or len(self.merges) == 0:
+        if len(vocab) == 0 or len(merges) == 0:
             return None
         
-        vocab_data = {str(token_id): byte_str.hex() for token_id, byte_str in self.vocab.items() }
+        vocab_data = {str(token_id): byte_str.hex() for token_id, byte_str in vocab.items() }
         with open(vocab_filepath, "w", encoding="utf-8") as f:
             json.dump(vocab_data, f, indent=2, ensure_ascii=False)
 
-        merges_data = [[a.hex(), b.hex()] for a, b in self.merges]
+        merges_data = [[a.hex(), b.hex()] for a, b in merges]
         with open(merges_filepath, "w", encoding="utf-8") as f:
             json.dump(merges_data, f, indent=2, ensure_ascii=False)
     
     # 从json文件中读取
-    def deserialize(self, vocab_filepath: str,merges_filepath: str,need_print = False):
+    @classmethod
+    def deserialize(cls, vocab_filepath: str,
+                    merges_filepath: str,
+                    need_print = False
+                    )->tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
         with open(vocab_filepath, "r", encoding="utf-8") as f:
             vocab_data = json.load(f)
         with open(merges_filepath, "r", encoding="utf-8") as f:
             merges_data = json.load(f)
-        self.vocab = {int(k): bytes.fromhex(v) for k, v in vocab_data.items()}
-        self.merges = [(bytes.fromhex(a), bytes.fromhex(b))for a, b in merges_data]
+        vocab = {int(k): bytes.fromhex(v) for k, v in vocab_data.items()}
+        merges = [(bytes.fromhex(a), bytes.fromhex(b))for a, b in merges_data]
         if need_print:
-            print(self.vocab)
-            print(self.merges)
+            print(vocab)
+            print(merges)
+        return (vocab,merges)
+        

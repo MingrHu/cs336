@@ -7,15 +7,17 @@ def train_bpe_tinystories():
     bpe.pre_process_text(10)
     bpe.train_bpe()
     # 序列化到磁盘
-    bpe.serialize(f"{output_dir}/tiny_stories_vocab.json",f"{output_dir}/tiny_stories_merges.json")
-
+    bpe.serialize(bpe.vocab,bpe.merges,
+        f"{output_dir}/tiny_stories_vocab.json",f"{output_dir}/tiny_stories_merges.json")
+    
 
 def train_bpe_expts_owt():
     input_path = "/home/humingrui/cs336/Assignment-1//data/owt_train.txt"
     bpe = MR_BPE(input_path,32000,special_tokens = ["<|endoftext|>"])
     bpe.pre_process_text()
     bpe.train_bpe()
-    bpe.serialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_merges.json")
+    bpe.serialize(bpe.vocab,bpe.merges,
+        f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_merges.json")
     # bpe.deserialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_merges.json",need_print=False)
 
 # def run_test_bpe():
