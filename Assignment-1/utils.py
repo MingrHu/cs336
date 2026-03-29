@@ -11,7 +11,7 @@ os.makedirs(output_dir,exist_ok=True)
 
 
 
-#####################Function#####################
+#####################Preprocess#####################
 def find_chunk_boundaries(
     file: BinaryIO,
     desired_num_chunks: int,
@@ -64,7 +64,7 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 
-## Usage
+## Usage for Preprocess
 # with open(..., "rb") as f: # type: ignore
 #     num_processes = 4
 #     boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
@@ -77,8 +77,7 @@ def find_chunk_boundaries(
 #         # Run pre-tokenization on your chunk and store the counts for each pre-token
 
 
-
-
+#####################BPE multiple process#####################
 def get_freq_dic(chunk:str,special_tokens:list[str])->dict[tuple[bytes,...],int]:
     # 参考实验手册 特殊token的匹配模式
     pattern:str = "|".join(map(re.escape,special_tokens))
@@ -97,9 +96,78 @@ def get_freq_dic(chunk:str,special_tokens:list[str])->dict[tuple[bytes,...],int]
             word_counts[key] = word_counts.get(key, 0) + 1
     return word_counts
 
-def handle_func(input_path:str,start:int,end:int,sp_tokens:list[str],q:multiprocessing.Queue):
+def handle_bpe_func(input_path:str,start:int,end:int,sp_tokens:list[str],q:multiprocessing.Queue):
     with open(input_path,'rb') as f:
         f.seek(start)
         data = f.read(end - start)
         chunk = data.decode("utf-8", errors="ignore")
         q.put(get_freq_dic(chunk,sp_tokens))
+
+
+#####################Tokenizer multiple process#####################
+def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[bytes,int],vocab:dict[int,bytes])->list[int]:
+    tokens:list[bytes] = []
+    parts:list[str] = []
+    sp_tokens:list[str] = sorted(special_tokens,key = len,reverse=True)
+
+    # 特殊词元列表为空时不应该拆分文本
+    if special_tokens != []:
+        pattern:str = "|".join(map(re.escape,sp_tokens))
+        parts = re.split(f'({pattern})', text) 
+        sp_tokens = re.findall(pattern,text)
+    else:
+        parts.append(text)
+    # 把文本先预处理 拆分为每个token
+    for part in parts:
+        # 如果是特殊token 则直接添加占位
+        if part in special_tokens:
+            tokens.append(b"")
+            continue
+        passage = re.findall(PAT,part)
+        for token in passage:
+            tokens.append(token.encode("utf-8"))
+    
+    ret:list[int] = []
+
+    # 需要按照生成的合并规则的顺序进行应用
+    # 复杂度 假设每个token的长度为k 有m个token 则复杂度为O(m*k2)
+    sp_idx = 0
+    for token in tokens:
+        if token == b"":
+            ret.append(dic_token_id[sp_tokens[sp_idx].encode("utf-8")])
+            sp_idx += 1
+            continue
+        text_bytes = tuple(bytes([b]) for b in token)
+        while True:
+            max_level = len(vocab)
+            merge_rule:bytes = b""
+            for idx in range(len(text_bytes) - 1):
+                pair = text_bytes[idx] + text_bytes[idx+1]
+                if dic_token_id.get(pair) == None:
+                    continue
+                if dic_token_id[pair] < max_level:
+                    max_level = dic_token_id[pair]
+                    merge_rule = pair
+            if merge_rule == b"":
+                break
+            new_text_bytes:list[bytes] = []
+            j = 0
+            while j < len(text_bytes):
+                if j < len(text_bytes) - 1 and text_bytes[j] + text_bytes[j+1] == merge_rule:
+                    new_text_bytes.append(merge_rule)
+                    j += 2
+                else:
+                    new_text_bytes.append(text_bytes[j])
+                    j += 1
+            text_bytes = tuple(new_text_bytes)
+        for b in text_bytes:
+            ret.append(dic_token_id[b])
+    return ret
+
+def handle_tokenizer_func(input_path:str,start:int,end:int,sp_tokens:list[str],
+                          dic_token_id:dict[bytes,int],vocab:dict[int,bytes],q:multiprocessing.Queue):
+    with open(input_path,'rb') as f:
+        f.seek(start)
+        data = f.read(end - start)
+        chunk = data.decode("utf-8", errors="ignore")
+        q.put(exec_tokenizer_func(sp_tokens,chunk,dic_token_id,vocab))

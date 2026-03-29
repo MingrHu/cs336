@@ -13,10 +13,10 @@ def train_bpe_tinystories():
 def train_bpe_expts_owt():
     input_path = "/home/humingrui/cs336/Assignment-1//data/owt_train.txt"
     bpe = MR_BPE(input_path,32000,special_tokens = ["<|endoftext|>"])
-    # bpe.pre_process_text()
-    # bpe.train_bpe()
-    # bpe.serialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_merges.json")
-    bpe.deserialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_merges.json",need_print=False)
+    bpe.pre_process_text()
+    bpe.train_bpe()
+    bpe.serialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_merges.json")
+    # bpe.deserialize(f"{output_dir}/owt_vocab.json",f"{output_dir}/owt_merges.json",need_print=False)
 
 # def run_test_bpe():
 #     special_tokens = ["<|endoftext|>", "<|startoftext|>"]
@@ -26,5 +26,5 @@ def train_bpe_expts_owt():
 #     print(bpe.get_vocab())
 #     print(bpe.get_merges())
 if __name__ == '__main__':
-    train_bpe_tinystories()
-    # train_bpe_expts_owt()
+    # train_bpe_tinystories()
+    train_bpe_expts_owt()

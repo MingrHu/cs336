@@ -6,7 +6,7 @@ import multiprocessing
 from typing import BinaryIO
 from utils import (PAT,output_dir,current_dir,
     find_chunk_boundaries,
-    handle_func,
+    handle_bpe_func,
     get_freq_dic
 )
 
@@ -48,7 +48,7 @@ class MR_BPE:
         # print(self.dic)
         return
         
-    def _multiple_pre_process_text(self,num_processes:int = 4)->dict[tuple[bytes,...],int]:
+    def _multiple_pre_process_text(self,num_processes:int = 8)->dict[tuple[bytes,...],int]:
         q = multiprocessing.Queue()
         process_ins:list[multiprocessing.Process] = []
         ret:dict[tuple[bytes,...],int] = {}
@@ -59,7 +59,7 @@ class MR_BPE:
 
         for start, end in zip(boundaries[:-1], boundaries[1:]):
             p = multiprocessing.Process(
-                target = handle_func,
+                target = handle_bpe_func,
                 args =(self.input_path,start,end,self.special_tokens,q))
             process_ins.append(p)
             p.start()

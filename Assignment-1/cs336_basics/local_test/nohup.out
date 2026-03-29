@@ -9,3 +9,15 @@ ERROR:2026-03-26 22:13:36 615596:615596 DeviceProperties.cpp:47] gpuGetDeviceCou
 Scalene: profile saved to scalene-profile.json
   To view in browser:  scalene view
   To view in terminal: scalene view --cli
+---------共有8个进程运行，获得8个reduce-----------
+🤔#####开始merge######🤓 当前处于第1个
+🤔#####开始merge######🤓 当前处于第2个
+🤔#####开始merge######🤓 当前处于第3个
+🤔#####开始merge######🤓 当前处于第4个
+🤔#####开始merge######🤓 当前处于第5个
+🤔#####开始merge######🤓 当前处于第6个
+🤔#####开始merge######🤓 当前处于第7个
+🤔#####开始merge######🤓 当前处于第8个
+✅ map-reduce 结束 返回预处理freq词典
+😎开始bpe训练 请等待......
+👏👏👏 恭喜！开始序列化字典和合并规则到磁盘 请注意查收

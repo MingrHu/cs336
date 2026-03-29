@@ -1,8 +1,11 @@
 import regex as re
 import json
+import multiprocessing  
 
 from typing import Iterable, Iterator
-from utils import PAT
+from utils import (PAT,
+                   find_chunk_boundaries,handle_tokenizer_func,
+                   exec_tokenizer_func)
 
 class MR_Tokenizer:
     def __init__(self, vocab:dict[int,bytes], merges:list[tuple[bytes,bytes]], special_tokens:list[str] | None = None):
@@ -55,61 +58,7 @@ class MR_Tokenizer:
         """将输入文本编码为词元ID序列"""
         if text == "":
             return []
-        tokens:list[bytes] = []
-        parts:list[str] = []
-        sp_tokens:list[str] = sorted(self.special_tokens,key = len,reverse=True)
-        
-        # 特殊词元列表为空时不应该拆分文本
-        if self.special_tokens != []:
-            pattern:str = "|".join(map(re.escape,sp_tokens))
-            parts = re.split(f'({pattern})', text) 
-            sp_tokens = re.findall(pattern,text)
-        else:
-            parts.append(text)
-        # 把文本先预处理 拆分为每个token
-        for part in parts:
-            # 如果是特殊token 则直接添加占位
-            if part in self.special_tokens:
-                tokens.append(b"")
-                continue
-            passage = re.findall(PAT,part)
-            for token in passage:
-                tokens.append(token.encode("utf-8"))
-        ret:list[int] = []
-
-        # 需要按照生成的合并规则的顺序进行应用
-        # 复杂度 假设每个token的长度为k 有m个token 则复杂度为O(m*k2)
-        sp_idx = 0
-        for token in tokens:
-            if token == b"":
-                ret.append(self.dic_token_id[sp_tokens[sp_idx].encode("utf-8")])
-                sp_idx += 1
-                continue
-            text_bytes = tuple(bytes([b]) for b in token)
-            while True:
-                max_level = len(self.vocab)
-                merge_rule:bytes = b""
-                for idx in range(len(text_bytes) - 1):
-                    pair = text_bytes[idx] + text_bytes[idx+1]
-                    if self.dic_token_id.get(pair) == None:
-                        continue
-                    if self.dic_token_id[pair] < max_level:
-                        max_level = self.dic_token_id[pair]
-                        merge_rule = pair
-                if merge_rule == b"":
-                    break
-                new_text_bytes:list[bytes] = []
-                j = 0
-                while j < len(text_bytes):
-                    if j < len(text_bytes) - 1 and text_bytes[j] + text_bytes[j+1] == merge_rule:
-                        new_text_bytes.append(merge_rule)
-                        j += 2
-                    else:
-                        new_text_bytes.append(text_bytes[j])
-                        j += 1
-                text_bytes = tuple(new_text_bytes)
-            for b in text_bytes:
-                ret.append(self.dic_token_id[b])
+        ret:list[int] = exec_tokenizer_func(self.special_tokens,text,self.dic_token_id,self.vocab)
         return ret
 
 
@@ -132,6 +81,38 @@ class MR_Tokenizer:
                 raise ValueError(f"Invalid token ID: {id}")
             
         return byte_buffer.decode("utf-8",errors = "replace")
+    
+    def _multiple_encode(self,input_path:str)->list[int]:
+        """针对大文件的多进程程编码"""
+        q = multiprocessing.Queue()
+        process_ins:list[multiprocessing.Process] = []
+        ret:list[int] = []
+        boundaries:list[int] = []
+
+        with open(input_path, "rb") as f:
+            boundaries = find_chunk_boundaries(f,8,[b.encode('utf-8') for b in self.special_tokens])
+
+        for start,end in zip(boundaries[:-1],boundaries[1:]):
+            p = multiprocessing.Process(
+                target = handle_tokenizer_func,
+                args =(input_path,start,end,
+                       self.special_tokens,self.dic_token_id,self.vocab,q))
+            process_ins.append(p)
+            p.start()
+
+        size = len(process_ins)
+        print(f"---------共有{size}个进程运行，获得{size}个reduce-----------")
+        for idx in range(size):
+            print(f"🤔#####开始merge######🤓 当前处于第{idx + 1}个")
+            # 每个reduce的结果都是一个list[int]
+            for val in q.get():
+                ret.append(val)
+
+        for p in process_ins:
+            p.join()
+
+        print(f"✅ map-reduce 结束 返回预处理后的词元ID序列")
+        return ret
 
 if __name__ == "__main__":
     tokenizer = MR_Tokenizer({},[])

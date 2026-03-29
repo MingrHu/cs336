@@ -19,6 +19,10 @@ def local_test_tokenizer():
     # Test roundtrip
     assert tokenizer.decode(ids) == test_string
 
+def tokenizer_experiments():
+    
+
+
 
 if __name__ == "__main__":
     local_test_tokenizer()
