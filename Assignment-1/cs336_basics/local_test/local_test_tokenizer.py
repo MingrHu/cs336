@@ -14,8 +14,7 @@ def tokenizer_experiments():
                                f"{current_dir}/output/tiny_stories_merges.json")
     tokenizer = MR_Tokenizer(vocab,merges,["<|endoftext|>"])
     token_id_list = tokenizer._multiple_encode(input_file_path)
-    data = b''.join(struct.pack('I', x) for x in token_id_list)
-    elemnts_size = len(data)
+    elemnts_size = len(token_id_list) * 2
 
     print(f"🥸 文本转token id序列后所占字节大小:{elemnts_size}")
     print(f"🤔 编码后压缩比为{file_size/elemnts_size}")
