@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from ml_utils import(create_regression_data,r2_score)
+from ml_utils import(create_regression_data,r2_score,std_scaler_mat,re_std_scaler)
 from typing import Any
 
 class MR_MLP:
@@ -11,12 +11,12 @@ class MR_MLP:
         self.hidden_dim2 = hidden_dim2
         self.output_dim = output_dim
         self.lr = learning_rate
-
-        self.w1 = np.random.randn(self.input_dim,self.hidden_dim1)
+        # Kaiming He 权重初始化
+        self.w1 = np.random.randn(self.input_dim,self.hidden_dim1) * np.sqrt(2.0 / input_dim)
         self.b1 = np.zeros((1,self.hidden_dim1))
-        self.w2 = np.random.randn(self.hidden_dim1,self.hidden_dim2)
+        self.w2 = np.random.randn(self.hidden_dim1,self.hidden_dim2)* np.sqrt(2.0 / hidden_dim1)
         self.b2 = np.zeros((1,self.hidden_dim2))
-        self.w3 = np.random.randn(self.hidden_dim2,self.output_dim)
+        self.w3 = np.random.randn(self.hidden_dim2,self.output_dim)* np.sqrt(2.0 / hidden_dim2)
         self.b3 = np.zeros((1,self.output_dim))
 
 
@@ -77,22 +77,34 @@ class MR_MLP:
 
 def train_model(model:MR_MLP,X:np.ndarray,Y:np.ndarray,epochs:int)->MR_MLP:
     print("训练开始...")
+    
+    x_scaled, _, _ = std_scaler_mat(X)
+    y_scaled, y_std, y_mean = std_scaler_mat(Y)
+    
     for epoch in range(epochs + 1):
-        y_pred = model.forward(X)
-        cur_loss = model.loss(Y)
-        cur_r2 = r2_score(Y,y_pred)
-        model.backward(X, Y)
-        if epoch % 100 == 0:
-            print(f"Epoch {epoch:4d} | Loss: {cur_loss:.3f} | r2:{cur_r2:.3f}")
+        y_pred = model.forward(x_scaled)
+        cur_loss = model.loss(y_scaled)
+        
+        y_true_ori = re_std_scaler(y_scaled, y_std, y_mean)
+        y_pred_ori = re_std_scaler(y_pred, y_std, y_mean)
+        cur_r2 = r2_score(y_true_ori, y_pred_ori)
+        
+        model.backward(x_scaled, y_scaled)
+        
+        if epoch % 500 == 0:
+            print(f"Epoch {epoch:4d} | Loss: {cur_loss:.4f} | r2:{cur_r2:.4f}")
     return model
 
 def mlp_liner_test(input_dim = 5,hidden1 = 16,hidden2 = 8,output_dim = 1,lr = 0.01,epochs = 15000):
-    X, Y = create_regression_data(samples=1000, input_dim=input_dim)
+    X, Y = create_regression_data(samples=10000, input_dim=input_dim)
+    y_sclaed,y_std,y_mean = std_scaler_mat(Y)
+
     org_model = MR_MLP(input_dim, hidden1, hidden2, output_dim, lr)
     ret_model = train_model(org_model,X,Y,epochs)
+
     print("\n==== 测试结果 ====")
     test_x = np.random.randn(1, input_dim)
-    pred_y = ret_model.forward(test_x)
+    pred_y = re_std_scaler(ret_model.forward(test_x),y_std,y_mean)
     true_y = test_x @ np.array([[2.5], [-1.3], [0.8], [3.1], [-0.5]])
     print(f"输入: {test_x.round(3)}")
     print(f"预测输出: {pred_y[0,0]:.4f}")
@@ -100,15 +112,22 @@ def mlp_liner_test(input_dim = 5,hidden1 = 16,hidden2 = 8,output_dim = 1,lr = 0.
 
 
 
-def mlp_lpq_data_test(input_dim = 5,hidden1 = 32,hidden2 = 16,output_dim = 8,lr = 0.01,epochs = 15000):
+def mlp_lpq_data_test():
     df = pd.read_excel("/Users/hmr/Desktop/AI/cs336/MachineLearning/lpq_data.xlsx")
-    X = df.iloc[:, :5].values  
+    X = df.iloc[:, :5].values
     Y = df.iloc[:, 5:].values
-    org_model = MR_MLP(input_dim, hidden1, hidden2, output_dim, lr)
-    ret_model = train_model(org_model,X,Y,epochs)
-    print(ret_model.w1)
+
+    model = MR_MLP(
+        input_dim=5,
+        hidden_dim1=64,
+        hidden_dim2=32,
+        output_dim=8,
+        learning_rate=0.001
+    )
+    
+    model = train_model(model, X, Y, epochs=20000)
+    return model
 
 if __name__ == "__main__":
-    # 超参数
-    mlp_liner_test()
+    mlp_lpq_data_test()
 
