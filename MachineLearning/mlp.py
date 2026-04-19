@@ -80,7 +80,9 @@ def train_model(model:MR_MLP,X:np.ndarray,Y:np.ndarray,epochs:int)->MR_MLP:
     
     x_scaled, _, _ = std_scaler_mat(X)
     y_scaled, y_std, y_mean = std_scaler_mat(Y)
-    
+    best_r2:float = 0
+    tag_epoch = 0
+
     for epoch in range(epochs + 1):
         y_pred = model.forward(x_scaled)
         cur_loss = model.loss(y_scaled)
@@ -88,11 +90,18 @@ def train_model(model:MR_MLP,X:np.ndarray,Y:np.ndarray,epochs:int)->MR_MLP:
         y_true_ori = re_std_scaler(y_scaled, y_std, y_mean)
         y_pred_ori = re_std_scaler(y_pred, y_std, y_mean)
         cur_r2 = r2_score(y_true_ori, y_pred_ori)
+        if cur_r2 > 0 and cur_r2 > best_r2:
+            tag_epoch = epoch
+            best_r2 = cur_r2
+        
+        if cur_r2 >0 and cur_r2 <= best_r2 and epoch - tag_epoch >= 100:
+            break
         
         model.backward(x_scaled, y_scaled)
-        
+
         if epoch % 500 == 0:
             print(f"Epoch {epoch:4d} | Loss: {cur_loss:.4f} | r2:{cur_r2:.4f}")
+
     return model
 
 def mlp_liner_test(input_dim = 5,hidden1 = 16,hidden2 = 8,output_dim = 1,lr = 0.01,epochs = 15000):
