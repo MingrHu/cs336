@@ -8,7 +8,7 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-from cs336_basics import bpe,tokenizer
+from cs336_basics import bpe,tokenizer,model
 
 
 def run_linear(
@@ -29,8 +29,10 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-
-    raise NotImplementedError
+    linear = model.MR_Model_linear(d_in,d_out)
+    linear.load_state_dict({"weight": weights})
+    return linear.forward(in_features)
+    
 
 
 def run_embedding(
@@ -51,8 +53,9 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
-
-    raise NotImplementedError
+    embedding = model.MR_Embedding(vocab_size,d_model)
+    embedding.load_state_dict({"embedding":weights})
+    return embedding.forward(token_ids)
 
 
 def run_swiglu(
@@ -379,7 +382,9 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    # 逐元素相乘
+    rmsn = model.MR_RMSNorm(d_model,eps)
+    return rmsn.forward(in_features) * weights.T
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
