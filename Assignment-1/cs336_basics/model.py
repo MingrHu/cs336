@@ -55,13 +55,19 @@ class MR_RMSNorm(nn.Module):
         return ret.to(in_type)
 
 class MR_SwiGLU(nn.Module):
-    def __init__(self,d_model: int,weight1: torch.Tensor,weight2: torch.Tensor,weight3: torch.Tensor, device=None, dtype=None):
+    def __init__(self,d_model: int,dff:int,weight1: torch.Tensor,weight2: torch.Tensor,weight3: torch.Tensor, device=None, dtype=None):
         super().__init__()
         self.dmodel = d_model
-        min_row = d_model * 8 // 3
-        self.dff = math.lcm(min_row,64)
+        self.dff = dff
         self.w1 = weight1
         self.w2 = weight2
         self.w3 = weight3
 
     def forward(self,x:torch.Tensor) -> torch.Tensor:
+        # shape = (...,dff)
+        w1_x = x @ self.w1.T
+        silu = w1_x * torch.sigmoid(w1_x)
+        # shape = (...,dff)
+        w3_x = x @ self.w3.T
+        glu = silu * w3_x
+        return glu @ self.w2.T
