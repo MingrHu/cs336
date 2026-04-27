@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import math
 
 class MR_Model_linear(nn.Module):
     # shape: (batch_size,sequence_size,dim)
@@ -53,3 +54,14 @@ class MR_RMSNorm(nn.Module):
         ret = x / rmsa
         return ret.to(in_type)
 
+class MR_SwiGLU(nn.Module):
+    def __init__(self,d_model: int,weight1: torch.Tensor,weight2: torch.Tensor,weight3: torch.Tensor, device=None, dtype=None):
+        super().__init__()
+        self.dmodel = d_model
+        min_row = d_model * 8 // 3
+        self.dff = math.lcm(min_row,64)
+        self.w1 = weight1
+        self.w2 = weight2
+        self.w3 = weight3
+
+    def forward(self,x:torch.Tensor) -> torch.Tensor:
