@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import numpy as np
 
 class MR_Model_linear(nn.Module):
     # shape: (batch_size,sequence_size,dim)
@@ -11,7 +10,7 @@ class MR_Model_linear(nn.Module):
         self.device = device
         self.dtype = dtype
         weight = torch.zeros((out_features,in_features),device=device, dtype=dtype)
-        std = np.sqrt(2 / (in_features + out_features))
+        std = torch.sqrt(2 / (in_features + out_features)).item()
         # 参考Task的初始化方法
         weight = nn.init.trunc_normal_(weight,0,std,-3 * std,3 * std)
         self.weight = nn.Parameter(weight)
