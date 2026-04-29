@@ -11,6 +11,7 @@ from torch import Tensor
 from cs336_basics import bpe,tokenizer,model
 
 
+# 线形层✅ 
 def run_linear(
     d_in: int,
     d_out: int,
@@ -34,7 +35,7 @@ def run_linear(
     return linear.forward(in_features)
     
 
-
+# 嵌入层✅
 def run_embedding(
     vocab_size: int,
     d_model: int,
@@ -57,7 +58,7 @@ def run_embedding(
     embedding.load_state_dict({"embedding":weights})
     return embedding.forward(token_ids)
 
-
+# FFN前向传播层✅
 def run_swiglu(
     d_model: int,
     d_ff: int,
@@ -185,7 +186,7 @@ def run_multihead_self_attention_with_rope(
     """
     raise NotImplementedError
 
-
+# 旋转位置编码RoPE✅
 def run_rope(
     d_k: int,
     theta: float,
@@ -205,7 +206,8 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    rope = model.MR_RoPE(theta,d_k,max_seq_len)
+    return rope.forward(in_query_or_key,token_positions)
 
 
 def run_transformer_block(
@@ -362,7 +364,7 @@ def run_transformer_lm(
     """
     raise NotImplementedError
 
-
+# 归一化✅
 def run_rmsnorm(
     d_model: int,
     eps: float,
@@ -545,7 +547,7 @@ def run_load_checkpoint(
     """
     raise NotImplementedError
 
-
+# 分词器编码解码✅
 def get_tokenizer(
     vocab: dict[int, bytes],
     merges: list[tuple[bytes, bytes]],
@@ -568,7 +570,7 @@ def get_tokenizer(
     """
     return tokenizer.MR_Tokenizer(vocab,merges,special_tokens)
 
-
+# BPE分词✅
 def run_train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,

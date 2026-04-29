@@ -70,29 +70,36 @@ class MR_SwiGLU(nn.Module):
 
 class MR_RoPE():
     def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None) :
-        """
-            Construct the RoPE module and create buffers if needed.
-            theta: float Θ value for the RoPE
-            d_k: int dimension of query and key vectors
-            max_seq_len: int Maximum sequence length that will be inputted
-            device: torch.device | None = None Device to store the buffer on
-        """
+        # 参考公式实现
         self.device = device
-        self.const_theta = theta
         self.d_k = d_k
-        self.max_seq_len = max_seq_len
-        self.device = device
-        self.cos_table = torch.zeros((max_seq_len,d_k // 2))
-        self.sin_table = torch.zeros((max_seq_len,d_k // 2))
+        # 提前存表计算 TODO:可不作为模型参数 参考论文用register
+        self.cos_table = torch.zeros((max_seq_len + 1,d_k // 2 + 1),device = device)
+        self.sin_table = torch.zeros((max_seq_len + 1,d_k // 2 + 1),device = device)
         for i in range(max_seq_len):
+            for k in range(1,d_k // 2 + 1):
+                theta_ik = i / (theta ** ((2 * k - 2) / d_k))
+                theta_tensor = torch.tensor(theta_ik)
+                self.cos_table[i][k] = torch.cos(theta_tensor)
+                self.sin_table[i][k] = torch.sin(theta_tensor)
 
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
-        """
-            Process an input tensor of shape (..., seq_len, d_k) and return a tensor of the same shape.
-            Note that you should tolerate x with an arbitrary number of batch dimensions. You should
-            assume that the token positions are a tensor of shape (..., seq_len) specifying the token
-            positions of x along the sequence dimension.
-            You should use the token positions to slice your (possibly precomputed) cos and sin tensors
-            along the sequence dimension.
-        """
+
+        # 不能在原始的x上直接改
+        out = x.clone()
+        for k in range(1,self.d_k // 2 + 1):
+            vec_x = x[...,2 * k - 2]
+            vec_y = x[...,2 * k - 1]
+            
+            new_x = vec_x * self.cos_table[token_positions,k] - vec_y * self.sin_table[token_positions,k]
+            new_y = vec_y * self.cos_table[token_positions,k] + vec_x * self.sin_table[token_positions,k]
+
+            out[...,2 * k - 2] = new_x
+            out[...,2 * k - 1] = new_y
+        return out
+                
+
+
+
+        
