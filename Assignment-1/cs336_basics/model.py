@@ -4,13 +4,13 @@ import torch.nn as nn
 class MR_Model_linear(nn.Module):
     # shape: (batch_size,sequence_size,dim)
     # 构建线性变换模块
-    def __init__(self, in_features, out_features, device=None, dtype=None):
+    def __init__(self, in_features:int, out_features:int, device=None, dtype=None):
         # 继承初始化父类
         super().__init__()
         self.device = device
         self.dtype = dtype
         weight = torch.zeros((out_features,in_features),device=device, dtype=dtype)
-        std = torch.sqrt(2 / (in_features + out_features)).item()
+        std = torch.sqrt(2 / torch.tensor(in_features + out_features)).item()
         # 参考Task的初始化方法
         weight = nn.init.trunc_normal_(weight,0,std,-3 * std,3 * std)
         self.weight = nn.Parameter(weight)
@@ -19,7 +19,7 @@ class MR_Model_linear(nn.Module):
         return x @ self.weight.T
 
 class MR_Embedding(nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, device=None, dtype=None):
+    def __init__(self, num_embeddings:int, embedding_dim:int, device=None, dtype=None):
         super().__init__()
         self.device = device
         self.dtype = dtype

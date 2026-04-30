@@ -1,4 +1,3 @@
-import regex as re
 import json
 import multiprocessing  
 

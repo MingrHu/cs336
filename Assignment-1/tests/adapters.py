@@ -8,7 +8,7 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-from cs336_basics import bpe,tokenizer,model
+from cs336_basics import bpe,tokenizer,model,transformer
 
 
 # 线形层✅ 
@@ -92,6 +92,7 @@ def run_swiglu(
     return swiglu.forward(in_features)
 
 
+# Scaled Dot Product Attention✅
 def run_scaled_dot_product_attention(
     Q: Float[Tensor, " ... queries d_k"],
     K: Float[Tensor, " ... keys d_k"],
@@ -110,7 +111,8 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    attention = transformer.scaled_dot_product_attention(Q,K,V,mask)
+    return attention
 
 
 def run_multihead_self_attention(
@@ -426,7 +428,7 @@ def run_get_batch(
     """
     raise NotImplementedError
 
-
+# softmax概率✅
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
     """
     Given a tensor of inputs, return the output of softmaxing the given `dim`
@@ -440,7 +442,8 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+    sf_mx = transformer.softmax(in_features,dim = dim)
+    return sf_mx
 
 
 def run_cross_entropy(
