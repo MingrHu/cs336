@@ -42,6 +42,7 @@ class MR_RMSNorm(nn.Module):
         in_type = x.dtype
         x = x.to(torch.float32)
         x_temp = x ** 2
+        # rmsa按照d_model的列求和做均值
         rmsa = torch.sqrt(x_temp.mean(dim = -1,keepdim= True) + self.eps)
         ret = x / rmsa
         return ret.to(in_type)

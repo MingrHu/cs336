@@ -41,6 +41,14 @@ t2 = x.transpose(0, 1)
 # 维度交换
 permute_x = torch.randn(2, 3, 4).permute(2, 0, 1)
 
+# [2,8,512] → [2,8,8,64]
+x_reshape = x.reshape(batch, seq_len, num_heads, -1)
+print(x_reshape.shape)  # torch.Size([2, 8, 8, 64])
+# [batch, seq_len, heads, dk] 
+# → [batch, heads, seq_len, dk]
+x_perm = x_reshape.permute(0, 2, 1, 3)
+print(x_perm.shape)  # torch.Size([2, 8, 8, 64])
+
 # ====================== 3. 逐元素运算 ======================
 a = torch.tensor([[1, 2], [3, 4]], dtype=torch.float32)
 b = torch.tensor([[5, 6], [7, 8]], dtype=torch.float32)
