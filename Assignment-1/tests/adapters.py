@@ -218,6 +218,7 @@ def run_rope(
     return rope.forward(in_query_or_key,token_positions)
 
 
+# Transformer Block✅
 def run_transformer_block(
     d_model: int,
     num_heads: int,
@@ -288,7 +289,19 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    q_weight = weights["attn.q_proj.weight"]
+    k_weight = weights["attn.k_proj.weight"]
+    v_weight = weights["attn.v_proj.weight"]
+    mut_out_weight = weights["attn.output_proj.weight"]
+    ln_weight1 = weights["ln1.weight"]
+    ln_weight2 = weights["ln2.weight"]
+    ffn_weight1 = weights["ffn.w1.weight"]
+    ffn_weight2 = weights["ffn.w2.weight"]
+    ffn_weight3 = weights["ffn.w3.weight"]
+    
+    transformer_block = transformer.MR_transformer_block(d_model,num_heads,d_ff,max_seq_len,theta,q_weight,k_weight,v_weight,
+                                                         mut_out_weight,ln_weight1,ln_weight2,ffn_weight1,ffn_weight2,ffn_weight3)
+    return transformer_block.forward(in_features)
 
 
 def run_transformer_lm(
@@ -370,6 +383,8 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
+
+    
     raise NotImplementedError
 
 # 归一化✅

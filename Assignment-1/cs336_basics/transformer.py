@@ -7,7 +7,7 @@ from einops import rearrange
 # @Description: 构建线性变换模块
 # @param in_features: 输入特征维度
 # @param out_features: 输出特征维度
-# @param device: 设备
+# @param device: CPU/GPU
 # @param dtype: 数据类型
 # @return: 线性变换模块
 class MR_Model_linear(nn.Module):
@@ -32,7 +32,7 @@ class MR_Model_linear(nn.Module):
 # @Description: 构建嵌入层
 # @param num_embeddings: 嵌入维度
 # @param embedding_dim: 嵌入维度
-# @param device: 设备
+# @param device: CPU/GPU
 # @param dtype: 数据类型
 # @return: 嵌入层
 class MR_Embedding(nn.Module):
@@ -52,11 +52,11 @@ class MR_Embedding(nn.Module):
 # @Description: 构建RMS归一化层
 # @param d_model: 输入特征维度
 # @param eps: 小常量
-# @param device: 设备
+# @param device: CPU/GPU
 # @param dtype: 数据类型
 # @return: RMS归一化层
 class MR_RMSNorm(nn.Module):
-    def __init__(self, d_model: int, eps: float = 1e-5, device=None, dtype=None):
+    def __init__(self, d_model: int, eps: float = 1e-5, device = None, dtype = None):
         super().__init__()
         self.device = device
         self.dtype = dtype
@@ -80,7 +80,7 @@ class MR_RMSNorm(nn.Module):
 # @param weight1: 第一个权重矩阵
 # @param weight2: 第二个权重矩阵
 # @param weight3: 第三个权重矩阵
-# @param device: 设备
+# @param device: CPU/GPU
 # @param dtype: 数据类型
 # @return: SwiGLU层
 class MR_SwiGLU(nn.Module):
@@ -110,7 +110,7 @@ class MR_SwiGLU(nn.Module):
 # @param theta: RoPE参数
 # @param d_model: 输入特征维度
 # @param max_seq_len: 最大序列长度
-# @param device: 设备
+# @param device: CPU/GPU
 # @return: RoPE层
 class MR_RoPE(nn.Module):
     def __init__(self, theta: float, d_model: int, max_seq_len: int, device=None) :
@@ -180,13 +180,12 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
 # @param max_seq_len: 最大序列长度
 # @param theta: RoPE参数
 # @param token_positions: 位置编码张量
-# @param device: 设备
+# @param device: CPU/GPU
 # @param dtype: 数据类型
 # @return: 多头自注意力层
 class MR_multihead_self_attention(nn.Module):
     def __init__(self,d_model: int,num_heads: int,q_weight:torch.Tensor,k_weight:torch.Tensor,v_weight:torch.Tensor,
-                 max_seq_len: int = 1024,theta:float | None = None,token_positions:torch.Tensor | None = None, 
-                 device = None, dtype = None):
+                 max_seq_len: int = 1024,theta:float | None = None,device = None, dtype = None):
         super().__init__()
         self.d_model = d_model
         self.num_heads = num_heads
@@ -200,9 +199,8 @@ class MR_multihead_self_attention(nn.Module):
         # [...,d_combine,d_in]
         self.qkv = torch.cat([q_weight,k_weight,v_weight],dim = -2)
         self.theta = theta
-        self.token_positions = token_positions
 
-    def forward(self,x:torch.Tensor,o_weight:torch.Tensor) -> torch.Tensor:
+    def forward(self,x:torch.Tensor,o_weight:torch.Tensor,token_positions:torch.Tensor | None = None) -> torch.Tensor:
         # [...,s,d_in] @ [d_combine,d_in].T
         # [...,s,d_combine]
         QKV = x @ self.qkv.T
@@ -218,10 +216,10 @@ class MR_multihead_self_attention(nn.Module):
         s_v = rearrange(per_v,"... s h d -> ... h s d")
         d_k = s_k.shape[-1]
         # RoPE
-        if self.theta is not None and self.token_positions is not None:
+        if self.theta is not None and token_positions is not None:
             rope = MR_RoPE(self.theta,d_k,self.max_seq_len,device = self.device)
-            s_q = rope.forward(s_q,self.token_positions)
-            s_k = rope.forward(s_k,self.token_positions)
+            s_q = rope.forward(s_q,token_positions)
+            s_k = rope.forward(s_k,token_positions)
 
         mask = self.mask[:x.size(-2),:x.size(-2)]
         ret = scaled_dot_product_attention(s_q,s_k,s_v,mask)
@@ -230,7 +228,26 @@ class MR_multihead_self_attention(nn.Module):
         return ret @ o_weight.T 
 
 
-
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建Transformer Block
+# @param d_model: 输入特征维度
+# @param num_heads: 头数
+# @param ffn_dim: FFN维度
+# @param max_seq_len: 最大序列长度
+# @param theta: RoPE参数
+# @param q_weight: 查询权重矩阵
+# @param k_weight: 键权重矩阵
+# @param v_weight: 值权重矩阵
+# @param mut_out_weight: 多头自注意力输出权重矩阵
+# @param ln_weight1: 第一个LayerNorm权重矩阵
+# @param ln_weight2: 第二个LayerNorm权重矩阵
+# @param ffn_weight1: 第一个FFN权重矩阵
+# @param ffn_weight2: 第二个FFN权重矩阵
+# @param ffn_weight3: 第三个FFN权重矩阵
+# @param device: CPU/GPU
+# @param dtype: 数据类型
+# @return: Transformer Block
 class MR_transformer_block(nn.Module):
     def __init__(self,d_model:int,num_heads:int,ffn_dim:int,max_seq_len:int,theta:float,
                  q_weight:torch.Tensor,k_weight:torch.Tensor,v_weight:torch.Tensor,mut_out_weight:torch.Tensor,
@@ -239,6 +256,42 @@ class MR_transformer_block(nn.Module):
         super().__init__()
         self.device = device
         self.dtype = dtype
-        self.ln1 = (d_model,eps = 1e-6,device = device,dtype = dtype)
+        self.mut_out_weight = mut_out_weight
+        self.ln_weight1 = ln_weight1
+        self.ln_weight2 = ln_weight2
+        # 一些子模块初始化
+        self.ln1 = MR_RMSNorm(d_model)
+        self.ln2 = MR_RMSNorm(d_model)
+        self.mha = MR_multihead_self_attention(d_model,num_heads,q_weight,k_weight,v_weight,max_seq_len,theta,device,dtype)
+        self.ffn = MR_SwiGLU(d_model,ffn_dim,ffn_weight1,ffn_weight2,ffn_weight3,device,dtype)
 
+    # x shape (batch sequence_length d_model)
+    # return shape (batch sequence_length d_model)
+    def forward(self,x:torch.Tensor) -> torch.Tensor:
+        # 1 LayerNorm1
+        fx1 = self.ln1.forward(x,self.ln_weight1)
+        batch_size = x.shape[0]
+        seq_len = x.shape[1]
+        # 生成token_positions
+        token_positions = torch.arange(seq_len,device = self.device,dtype = self.dtype)
+        token_positions = token_positions.repeat(batch_size,1)
+        # 2 MHA
+        mha_out = self.mha.forward(fx1,self.mut_out_weight,token_positions)
+        # Add
+        y1 = mha_out + x
+        # 3 LayerNorm2
+        fx2 = self.ln2.forward(y1,self.ln_weight2)
+        # 4 FFN
+        ffn_out = self.ffn.forward(fx2)
+        # Add
+        y2 = ffn_out + y1
+        return y2
         
+
+
+class MR_transformer_lm(nn.Module):
+    def __init__(self,vocab_size:int,context_length:int,d_model:int,num_layers:int,num_heads:int,d_ff:int,rope_theta:float,
+                 q_weight:torch.Tensor,k_weight:torch.Tensor,v_weight:torch.Tensor,mut_out_weight:torch.Tensor,
+                 ln_weight1:torch.Tensor,ln_weight2:torch.Tensor,ffn_weight1:torch.Tensor,ffn_weight2:torch.Tensor,
+                 ffn_weight3:torch.Tensor,device = None, dtype = None):
+        super().__init__()
