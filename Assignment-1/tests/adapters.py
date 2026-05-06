@@ -8,7 +8,7 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-from cs336_basics import bpe,tokenizer,model,transformer
+from cs336_basics import bpe,tokenizer,transformer
 
 
 # 线形层✅ 
@@ -30,7 +30,7 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-    linear = model.MR_Model_linear(d_in,d_out)
+    linear = transformer.MR_Model_linear(d_in,d_out)
     linear.load_state_dict({"weight": weights})
     return linear.forward(in_features)
     
@@ -54,7 +54,7 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
-    embedding = model.MR_Embedding(vocab_size,d_model)
+    embedding = transformer.MR_Embedding(vocab_size,d_model)
     embedding.load_state_dict({"embedding":weights})
     return embedding.forward(token_ids)
 
@@ -88,7 +88,7 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    swiglu = model.MR_SwiGLU(d_model,d_ff,w1_weight,w2_weight,w3_weight)
+    swiglu = transformer.MR_SwiGLU(d_model,d_ff,w1_weight,w2_weight,w3_weight)
     return swiglu.forward(in_features)
 
 
@@ -151,6 +151,7 @@ def run_multihead_self_attention(
     return mut_attention.forward(in_features,o_proj_weight)
 
 
+# Multihead Attention with RoPE✅
 def run_multihead_self_attention_with_rope(
     d_model: int,
     num_heads: int,
@@ -188,7 +189,10 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    mut_attention_with_rope = transformer.MR_multihead_self_attention(d_model,num_heads,q_proj_weight,k_proj_weight,
+                                                                      v_proj_weight,max_seq_len,theta,token_positions)
+    return mut_attention_with_rope.forward(in_features,o_proj_weight)
+    
 
 # 旋转位置编码RoPE✅
 def run_rope(
@@ -210,7 +214,7 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    rope = model.MR_RoPE(theta,d_k,max_seq_len)
+    rope = transformer.MR_RoPE(theta,d_k,max_seq_len)
     return rope.forward(in_query_or_key,token_positions)
 
 
@@ -390,8 +394,8 @@ def run_rmsnorm(
         RMSNorm of the `in_features`.
     """
     # 逐元素相乘
-    rmsn = model.MR_RMSNorm(d_model,eps)
-    return rmsn.forward(in_features) * weights.T
+    rmsn = transformer.MR_RMSNorm(d_model,eps)
+    return rmsn.forward(in_features,weights)
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:

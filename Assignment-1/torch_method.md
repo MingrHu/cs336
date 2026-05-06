@@ -23,6 +23,10 @@ randint = torch.randint(0, 10, (2, 3))
 arange = torch.arange(0, 10, 1)
 linspace = torch.linspace(0, 1, 5)
 
+# 下三角为1其余为0的矩阵
+seq_len = 8
+mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool))
+
 # ====================== 2. 形状/维度操作 ======================
 x = torch.randn(4, 6)
 

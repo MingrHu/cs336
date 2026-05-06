@@ -1,15 +1,20 @@
-import regex as re
 import json
 import os
 import multiprocessing
 
-from typing import BinaryIO
 from utils import (PAT,output_dir,current_dir,
     find_chunk_boundaries,
     handle_bpe_func,
     get_freq_dic
 )
 
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建BPE编码器
+# @param input_path: 输入文本路径
+# @param vocab_size: 词汇表大小
+# @param special_tokens: 特殊 token 列表
+# @return: BPE编码器
 class MR_BPE:
 
     def __init__(self,input_path:str | os.PathLike,vocab_size:int,special_tokens:list[str]) -> None:

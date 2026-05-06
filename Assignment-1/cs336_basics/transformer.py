@@ -1,7 +1,155 @@
 import torch
 import torch.nn as nn
-from einops import rearrange, einsum
+from einops import rearrange
 
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建线性变换模块
+# @param in_features: 输入特征维度
+# @param out_features: 输出特征维度
+# @param device: 设备
+# @param dtype: 数据类型
+# @return: 线性变换模块
+class MR_Model_linear(nn.Module):
+    # shape: (batch_size,sequence_size,dim)
+    # 构建线性变换模块
+    def __init__(self, in_features:int, out_features:int, device=None, dtype=None):
+        # 继承初始化父类
+        super().__init__()
+        self.device = device
+        self.dtype = dtype
+        weight = torch.zeros((out_features,in_features),device = device, dtype = dtype)
+        std = torch.sqrt(2 / torch.tensor(in_features + out_features)).item()
+        # 参考Task的初始化方法
+        weight = nn.init.trunc_normal_(weight,0,std,-3 * std,3 * std)
+        self.weight = nn.Parameter(weight)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x @ self.weight.T
+
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建嵌入层
+# @param num_embeddings: 嵌入维度
+# @param embedding_dim: 嵌入维度
+# @param device: 设备
+# @param dtype: 数据类型
+# @return: 嵌入层
+class MR_Embedding(nn.Module):
+    def __init__(self, num_embeddings:int, embedding_dim:int, device = None, dtype = None):
+        super().__init__()
+        self.device = device
+        self.dtype = dtype
+        embedding = torch.zeros((num_embeddings,embedding_dim),device = device, dtype = dtype)
+        embedding = nn.init.trunc_normal_(embedding,0,1,-1,1)
+        self.embedding = nn.Parameter(embedding)
+
+    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+        return self.embedding[token_ids]
+
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建RMS归一化层
+# @param d_model: 输入特征维度
+# @param eps: 小常量
+# @param device: 设备
+# @param dtype: 数据类型
+# @return: RMS归一化层
+class MR_RMSNorm(nn.Module):
+    def __init__(self, d_model: int, eps: float = 1e-5, device=None, dtype=None):
+        super().__init__()
+        self.device = device
+        self.dtype = dtype
+        self.eps = eps
+        self.dmodel = d_model
+
+    def forward(self, x: torch.Tensor,weights: torch.Tensor) -> torch.Tensor:
+        in_type = x.dtype
+        x = x.to(torch.float32)
+        x_temp = x ** 2
+        # rmsa按照d_model的列求和做均值
+        rmsa = torch.sqrt(x_temp.mean(dim = -1,keepdim= True) + self.eps)
+        ret = x / rmsa
+        return ret.to(in_type) * weights.T
+
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建SwiGLU层
+# @param d_model: 输入特征维度
+# @param dff: 中间层维度
+# @param weight1: 第一个权重矩阵
+# @param weight2: 第二个权重矩阵
+# @param weight3: 第三个权重矩阵
+# @param device: 设备
+# @param dtype: 数据类型
+# @return: SwiGLU层
+class MR_SwiGLU(nn.Module):
+    def __init__(self,d_model: int,dff:int,weight1: torch.Tensor,weight2: torch.Tensor,weight3: torch.Tensor, device=None, dtype=None):
+        super().__init__()
+        self.device = device
+        self.dtype = dtype
+        self.dmodel = d_model
+        self.dff = dff
+        self.w1 = weight1
+        self.w2 = weight2
+        self.w3 = weight3
+
+    def forward(self,x:torch.Tensor) -> torch.Tensor:
+        # shape = (...,dff)
+        w1_x = x @ self.w1.T
+        silu = w1_x * torch.sigmoid(w1_x)
+        # shape = (...,dff)
+        w3_x = x @ self.w3.T
+        glu = silu * w3_x
+        return glu @ self.w2.T
+    
+
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建RoPE层
+# @param theta: RoPE参数
+# @param d_model: 输入特征维度
+# @param max_seq_len: 最大序列长度
+# @param device: 设备
+# @return: RoPE层
+class MR_RoPE(nn.Module):
+    def __init__(self, theta: float, d_model: int, max_seq_len: int, device=None) :
+        # 参考公式实现
+        self.device = device
+        self.d_k = d_model
+        # 提前存表计算 TODO:可不作为模型参数 参考论文用register
+        self.cos_table = torch.zeros((max_seq_len + 1,d_model // 2 + 1),device = device)
+        self.sin_table = torch.zeros((max_seq_len + 1,d_model // 2 + 1),device = device)
+        for i in range(max_seq_len):
+            for k in range(1,d_model // 2 + 1):
+                theta_ik = i / (theta ** ((2 * k - 2) / d_model))
+                theta_tensor = torch.tensor(theta_ik)
+                self.cos_table[i][k] = torch.cos(theta_tensor)
+                self.sin_table[i][k] = torch.sin(theta_tensor)
+
+
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+
+        # 不能在原始的x上直接改
+        out = x.clone()
+        for k in range(1,self.d_k // 2 + 1):
+            vec_x = x[...,2 * k - 2]
+            vec_y = x[...,2 * k - 1]
+            
+            new_x = vec_x * self.cos_table[token_positions,k] - vec_y * self.sin_table[token_positions,k]
+            new_y = vec_y * self.cos_table[token_positions,k] + vec_x * self.sin_table[token_positions,k]
+
+            out[...,2 * k - 2] = new_x
+            out[...,2 * k - 1] = new_y
+        return out
+                
+
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建softmax层
+# @param x: 输入张量
+# @param dim: 指定维度
+# @return: softmax张量
 def softmax(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     max_val = torch.max(x,dim = dim,keepdim = True).values
     return torch.exp(x - max_val) / torch.exp(x - max_val).sum(dim = dim,keepdim = True)
@@ -21,18 +169,38 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
     return attention @ v
 
 
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建多头自注意力层
+# @param d_model: 输入特征维度
+# @param num_heads: 头数
+# @param q_weight: 查询权重矩阵
+# @param k_weight: 键权重矩阵
+# @param v_weight: 值权重矩阵
+# @param max_seq_len: 最大序列长度
+# @param theta: RoPE参数
+# @param token_positions: 位置编码张量
+# @param device: 设备
+# @param dtype: 数据类型
+# @return: 多头自注意力层
 class MR_multihead_self_attention(nn.Module):
-    def __init__(self,d_model: int,num_heads: int,q_weight:torch.Tensor,
-                 k_weight:torch.Tensor,v_weight:torch.Tensor,device = None, dtype = None):
+    def __init__(self,d_model: int,num_heads: int,q_weight:torch.Tensor,k_weight:torch.Tensor,v_weight:torch.Tensor,
+                 max_seq_len: int = 1024,theta:float | None = None,token_positions:torch.Tensor | None = None, 
+                 device = None, dtype = None):
         super().__init__()
         self.d_model = d_model
         self.num_heads = num_heads
+        self.max_seq_len = max_seq_len
         self.device = device
         self.dtype = dtype
-        self.d = d_model // num_heads
+        
+        # mask 下三角矩阵 
+        self.mask = torch.tril(torch.ones(max_seq_len, max_seq_len, dtype = torch.bool))
         self.q_size,self.k_size,self.v_size = q_weight.size(0),k_weight.size(0),v_weight.size(0)
-        # [...,d_in]
+        # [...,d_combine,d_in]
         self.qkv = torch.cat([q_weight,k_weight,v_weight],dim = -2)
+        self.theta = theta
+        self.token_positions = token_positions
 
     def forward(self,x:torch.Tensor,o_weight:torch.Tensor) -> torch.Tensor:
         # [...,s,d_in] @ [d_combine,d_in].T
@@ -48,8 +216,29 @@ class MR_multihead_self_attention(nn.Module):
         s_q = rearrange(per_q,"... s h d -> ... h s d")
         s_k = rearrange(per_k,"... s h d -> ... h s d")
         s_v = rearrange(per_v,"... s h d -> ... h s d")
+        d_k = s_k.shape[-1]
+        # RoPE
+        if self.theta is not None and self.token_positions is not None:
+            rope = MR_RoPE(self.theta,d_k,self.max_seq_len,device = self.device)
+            s_q = rope.forward(s_q,self.token_positions)
+            s_k = rope.forward(s_k,self.token_positions)
 
-        ret = scaled_dot_product_attention(s_q,s_k,s_v)
+        mask = self.mask[:x.size(-2),:x.size(-2)]
+        ret = scaled_dot_product_attention(s_q,s_k,s_v,mask)
         ret = rearrange(ret,"... h s per_dv -> ... s (h per_dv)")
         # [...,s,d_v] @ [d_model,d_v].T
         return ret @ o_weight.T 
+
+
+
+class MR_transformer_block(nn.Module):
+    def __init__(self,d_model:int,num_heads:int,ffn_dim:int,max_seq_len:int,theta:float,
+                 q_weight:torch.Tensor,k_weight:torch.Tensor,v_weight:torch.Tensor,mut_out_weight:torch.Tensor,
+                 ln_weight1:torch.Tensor,ln_weight2:torch.Tensor,ffn_weight1:torch.Tensor,ffn_weight2:torch.Tensor,
+                 ffn_weight3:torch.Tensor,device = None, dtype = None):
+        super().__init__()
+        self.device = device
+        self.dtype = dtype
+        self.ln1 = (d_model,eps = 1e-6,device = device,dtype = dtype)
+
+        
