@@ -5,11 +5,12 @@ from einops import rearrange
 # @Author: MingrHu
 # @Date: 2026-05-06
 # @Description: 构建线性变换模块
-# @param in_features: 输入特征维度
-# @param out_features: 输出特征维度
-# @param device: CPU/GPU
-# @param dtype: 数据类型
-# @return: 线性变换模块
+# @Param in_features: 输入特征维度
+# @Param out_features: 输出特征维度
+# @Param device: CPU/GPU
+# @Param dtype: 数据类型
+# @Return: 线性变换模块
+# @FLOPs: 2 * m * n * p
 class MR_Model_linear(nn.Module):
     # shape: (batch_size,sequence_size,dim)
     # 构建线性变换模块
@@ -30,11 +31,12 @@ class MR_Model_linear(nn.Module):
 # @Author: MingrHu
 # @Date: 2026-05-06
 # @Description: 构建嵌入层
-# @param num_embeddings: 嵌入维度
-# @param embedding_dim: 嵌入维度
-# @param device: CPU/GPU
-# @param dtype: 数据类型
-# @return: 嵌入层
+# @Param num_embeddings: 嵌入维度
+# @Param embedding_dim: 嵌入维度
+# @Param device: CPU/GPU
+# @Param dtype: 数据类型
+# @Return: 嵌入层
+# @FLOPs: m * n
 class MR_Embedding(nn.Module):
     def __init__(self, num_embeddings:int, embedding_dim:int, device = None, dtype = None):
         super().__init__()
@@ -50,11 +52,12 @@ class MR_Embedding(nn.Module):
 # @Author: MingrHu
 # @Date: 2026-05-06
 # @Description: 构建RMS归一化层
-# @param d_model: 输入特征维度
-# @param eps: 小常量
-# @param device: CPU/GPU
-# @param dtype: 数据类型
-# @return: RMS归一化层
+# @Param d_model: 输入特征维度
+# @Param eps: 小常量
+# @Param device: CPU/GPU
+# @Param dtype: 数据类型
+# @Return: RMS归一化层
+# @FLOPS: m * n
 class MR_RMSNorm(nn.Module):
     def __init__(self, d_model: int, eps: float = 1e-5, device = None, dtype = None):
         super().__init__()
@@ -75,14 +78,15 @@ class MR_RMSNorm(nn.Module):
 # @Author: MingrHu
 # @Date: 2026-05-06
 # @Description: 构建SwiGLU层
-# @param d_model: 输入特征维度
-# @param dff: 中间层维度
-# @param weight1: 第一个权重矩阵
-# @param weight2: 第二个权重矩阵
-# @param weight3: 第三个权重矩阵
-# @param device: CPU/GPU
-# @param dtype: 数据类型
-# @return: SwiGLU层
+# @Param d_model: 输入特征维度
+# @Param dff: 中间层维度
+# @Param weight1: 第一个权重矩阵
+# @Param weight2: 第二个权重矩阵
+# @Param weight3: 第三个权重矩阵
+# @Param device: CPU/GPU
+# @Param dtype: 数据类型
+# @Return: SwiGLU层
+# @FLOPs: 
 class MR_SwiGLU(nn.Module):
     def __init__(self,d_model: int,dff:int,weight1: torch.Tensor,weight2: torch.Tensor,weight3: torch.Tensor, device=None, dtype=None):
         super().__init__()
@@ -107,17 +111,18 @@ class MR_SwiGLU(nn.Module):
 # @Author: MingrHu
 # @Date: 2026-05-06
 # @Description: 构建RoPE层
-# @param theta: RoPE参数
-# @param d_model: 输入特征维度
-# @param max_seq_len: 最大序列长度
-# @param device: CPU/GPU
-# @return: RoPE层
+# @Param theta: RoPE参数
+# @Param d_model: 输入特征维度
+# @Param max_seq_len: 最大序列长度
+# @Param device: CPU/GPU
+# @Return: RoPE层
 class MR_RoPE(nn.Module):
     def __init__(self, theta: float, d_model: int, max_seq_len: int, device=None) :
         # 参考公式实现
         self.device = device
         self.d_k = d_model
         # 提前存表计算 TODO:可不作为模型参数 参考论文用register
+        # shape [mx_seq_len,d]
         self.cos_table = torch.zeros((max_seq_len + 1,d_model // 2 + 1),device = device)
         self.sin_table = torch.zeros((max_seq_len + 1,d_model // 2 + 1),device = device)
         for i in range(max_seq_len):
@@ -135,7 +140,7 @@ class MR_RoPE(nn.Module):
         for k in range(1,self.d_k // 2 + 1):
             vec_x = x[...,2 * k - 2]
             vec_y = x[...,2 * k - 1]
-            
+            # token_pos shape [batch,seq_len]
             new_x = vec_x * self.cos_table[token_positions,k] - vec_y * self.sin_table[token_positions,k]
             new_y = vec_y * self.cos_table[token_positions,k] + vec_x * self.sin_table[token_positions,k]
 
@@ -147,9 +152,9 @@ class MR_RoPE(nn.Module):
 # @Author: MingrHu
 # @Date: 2026-05-06
 # @Description: 构建softmax层
-# @param x: 输入张量
-# @param dim: 指定维度
-# @return: softmax张量
+# @Param x: 输入张量
+# @Param dim: 指定维度
+# @Return: softmax张量
 def softmax(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     max_val = torch.max(x,dim = dim,keepdim = True).values
     return torch.exp(x - max_val) / torch.exp(x - max_val).sum(dim = dim,keepdim = True)
@@ -172,17 +177,17 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
 # @Author: MingrHu
 # @Date: 2026-05-06
 # @Description: 构建多头自注意力层
-# @param d_model: 输入特征维度
-# @param num_heads: 头数
-# @param q_weight: 查询权重矩阵
-# @param k_weight: 键权重矩阵
-# @param v_weight: 值权重矩阵
-# @param max_seq_len: 最大序列长度
-# @param theta: RoPE参数
-# @param token_positions: 位置编码张量
-# @param device: CPU/GPU
-# @param dtype: 数据类型
-# @return: 多头自注意力层
+# @Param d_model: 输入特征维度
+# @Param num_heads: 头数
+# @Param q_weight: 查询权重矩阵
+# @Param k_weight: 键权重矩阵
+# @Param v_weight: 值权重矩阵
+# @Param max_seq_len: 最大序列长度
+# @Param theta: RoPE参数
+# @Param token_positions: 位置编码张量
+# @Param device: CPU/GPU
+# @Param dtype: 数据类型
+# @Return: 多头自注意力层
 class MR_multihead_self_attention(nn.Module):
     def __init__(self,d_model: int,num_heads: int,q_weight:torch.Tensor,k_weight:torch.Tensor,v_weight:torch.Tensor,
                  max_seq_len: int = 1024,theta:float | None = None,device = None, dtype = None):
@@ -231,23 +236,23 @@ class MR_multihead_self_attention(nn.Module):
 # @Author: MingrHu
 # @Date: 2026-05-06
 # @Description: 构建Transformer Block
-# @param d_model: 输入特征维度
-# @param num_heads: 头数
-# @param ffn_dim: FFN维度
-# @param max_seq_len: 最大序列长度
-# @param theta: RoPE参数
-# @param q_weight: 查询权重矩阵
-# @param k_weight: 键权重矩阵
-# @param v_weight: 值权重矩阵
-# @param mut_out_weight: 多头自注意力输出权重矩阵
-# @param ln_weight1: 第一个LayerNorm权重矩阵
-# @param ln_weight2: 第二个LayerNorm权重矩阵
-# @param ffn_weight1: 第一个FFN权重矩阵
-# @param ffn_weight2: 第二个FFN权重矩阵
-# @param ffn_weight3: 第三个FFN权重矩阵
-# @param device: CPU/GPU
-# @param dtype: 数据类型
-# @return: Transformer Block
+# @Param d_model: 输入特征维度
+# @Param num_heads: 头数
+# @Param ffn_dim: FFN维度
+# @Param max_seq_len: 最大序列长度
+# @Param theta: RoPE参数
+# @Param q_weight: 查询权重矩阵
+# @Param k_weight: 键权重矩阵
+# @Param v_weight: 值权重矩阵
+# @Param mut_out_weight: 多头自注意力输出权重矩阵
+# @Param ln_weight1: 第一个LayerNorm权重矩阵
+# @Param ln_weight2: 第二个LayerNorm权重矩阵
+# @Param ffn_weight1: 第一个FFN权重矩阵
+# @Param ffn_weight2: 第二个FFN权重矩阵
+# @Param ffn_weight3: 第三个FFN权重矩阵
+# @Param device: CPU/GPU
+# @Param dtype: 数据类型
+# @Return: Transformer Block
 class MR_transformer_block(nn.Module):
     def __init__(self,d_model:int,num_heads:int,ffn_dim:int,max_seq_len:int,theta:float,
                  q_weight:torch.Tensor,k_weight:torch.Tensor,v_weight:torch.Tensor,mut_out_weight:torch.Tensor,
@@ -266,7 +271,7 @@ class MR_transformer_block(nn.Module):
         self.ffn = MR_SwiGLU(d_model,ffn_dim,ffn_weight1,ffn_weight2,ffn_weight3,device,dtype)
 
     # x shape (batch sequence_length d_model)
-    # return shape (batch sequence_length d_model)
+    # Return shape (batch sequence_length d_model)
     def forward(self,x:torch.Tensor) -> torch.Tensor:
         # 1 LayerNorm1
         fx1 = self.ln1.forward(x,self.ln_weight1)
@@ -291,7 +296,34 @@ class MR_transformer_block(nn.Module):
 
 class MR_transformer_lm(nn.Module):
     def __init__(self,vocab_size:int,context_length:int,d_model:int,num_layers:int,num_heads:int,d_ff:int,rope_theta:float,
-                 q_weight:torch.Tensor,k_weight:torch.Tensor,v_weight:torch.Tensor,mut_out_weight:torch.Tensor,
-                 ln_weight1:torch.Tensor,ln_weight2:torch.Tensor,ffn_weight1:torch.Tensor,ffn_weight2:torch.Tensor,
-                 ffn_weight3:torch.Tensor,device = None, dtype = None):
+                in_indices:torch.Tensor,weights:dict[str,torch.Tensor],device = None, dtype = None):
         super().__init__()
+        token_embeddings = weights["token_embeddings.weight"]
+        # [vocab_size,d_model]  [batch,seq_len] = [batch,seq_len,d_model]
+        in_features = token_embeddings[in_indices]
+
+        for i in range(num_layers):
+            q_weight = weights[f"layers.{i}.attn.q_proj.weight"]
+            k_weight = weights[f"layers.{i}.attn.k_proj.weight"]
+            v_weight = weights[f"layers.{i}.attn.v_proj.weight"]
+            mut_out_weight = weights[f"layers.{i}.attn.output_proj.weight"]
+            ln_weight1 = weights[f"layers.{i}.ln1.weight"]
+            ln_weight2 = weights[f"layers.{i}.ln2.weight"]
+            ffn_weight1 = weights[f"layers.{i}.ffn.w1.weight"]
+            ffn_weight2 = weights[f"layers.{i}.ffn.w2.weight"]
+            ffn_weight3 = weights[f"layers.{i}.ffn.w3.weight"]
+            transformer_block = MR_transformer_block(d_model,num_heads,d_ff,context_length,rope_theta,q_weight,k_weight,v_weight,
+                                                         mut_out_weight,ln_weight1,ln_weight2,ffn_weight1,ffn_weight2,ffn_weight3)
+            in_features = transformer_block.forward(in_features)
+    
+        self.in_features = in_features
+        self.ln_final_weight = weights["ln_final.weight"]
+        self.out_weight = weights["lm_head.weight"]
+        self.ln_final_fx = MR_RMSNorm(d_model)
+        
+
+    def forward(self)->torch.Tensor:
+        ln_final = self.ln_final_fx.forward(self.in_features,self.ln_final_weight)  
+        # [b,s,d] @ [vocab_size,d_model].T
+        liner_ret = ln_final @ self.out_weight.T
+        return liner_ret
