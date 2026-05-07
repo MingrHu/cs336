@@ -44,13 +44,13 @@ class MR_Embedding(nn.Module):
         super().__init__()
         self.device = device
         self.dtype = dtype
-        embedding = torch.zeros((num_embeddings,embedding_dim),device = device, dtype = dtype)
-        embedding = nn.init.trunc_normal_(embedding,0,1,-1,1)
+        weight = torch.zeros((num_embeddings,embedding_dim),device = device, dtype = dtype)
+        weight = nn.init.trunc_normal_(weight,0,1,-1,1)
         # register
-        self.embedding = nn.Parameter(embedding)
+        self.weight = nn.Parameter(weight)
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
-        return self.embedding[token_ids]
+        return self.weight[token_ids]
 
 
 # @Author: MingrHu
@@ -102,19 +102,19 @@ class MR_SwiGLU(nn.Module):
         self.dmodel = d_model
         self.dff = dff
         # register
-        self.weight1 = MR_Model_linear(d_model,dff,device = device, dtype = dtype)
-        self.weight2 = MR_Model_linear(dff,d_model,device = device, dtype = dtype)
-        self.weight3 = MR_Model_linear(d_model,dff,device = device, dtype = dtype)
+        self.w1 = MR_Model_linear(d_model,dff,device = device, dtype = dtype)
+        self.w2 = MR_Model_linear(dff,d_model,device = device, dtype = dtype)
+        self.w3 = MR_Model_linear(d_model,dff,device = device, dtype = dtype)
 
     def forward(self,x:torch.Tensor) -> torch.Tensor:
         # (...,s,d_model) @ (dff,d_model).T
-        w1_x = self.weight1(x)
+        w1_x = self.w1(x)
         silu = w1_x * torch.sigmoid(w1_x)
         # (...,s,d_model) @ (dff,d_model).T
-        w3_x = self.weight3(x)
+        w3_x = self.w3(x)
         glu = silu * w3_x
         # (...,s,dff) @ (d_model,dff).T
-        return self.weight2(glu)
+        return self.w2(glu)
     
     
 # @Author: MingrHu
@@ -127,36 +127,33 @@ class MR_SwiGLU(nn.Module):
 # @Return: RoPE层
 class MR_RoPE(nn.Module):
     def __init__(self, theta: float, d_model: int, max_seq_len: int, device = None, dtype = None) :
+        super().__init__()
         # 参考公式实现
         self.device = device
         self.dtype = dtype
         self.d_k = d_model
-        # 提前存表计算 TODO:可不作为模型参数 参考论文用register
-        # shape [mx_seq_len,d]
-        self.cos_table = torch.zeros((max_seq_len + 1,d_model // 2 + 1),device = device, dtype = dtype)
-        self.sin_table = torch.zeros((max_seq_len + 1,d_model // 2 + 1),device = device, dtype = dtype)
-        for i in range(max_seq_len):
-            for k in range(1,d_model // 2 + 1):
-                theta_ik = i / (theta ** ((2 * k - 2) / d_model))
-                theta_tensor = torch.tensor(theta_ik)
-                self.cos_table[i][k] = torch.cos(theta_tensor)
-                self.sin_table[i][k] = torch.sin(theta_tensor)
-        # register
-        self.token_positions = nn.Parameter(torch.arange(max_seq_len,device = device, dtype = dtype))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        inv_freq = 1.0 / (theta ** (torch.arange(0,d_model,2).float() / d_model))
+        seq_i = torch.arange(max_seq_len).float()
+        # (max_seq_len,1) @ (1,d_model // 2)
+        theta_ik = seq_i.reshape(-1,1) @ inv_freq.reshape(1,-1)
+
+        self.cos_table = torch.cos(theta_ik)
+        self.sin_table = torch.sin(theta_ik)
+
+    def forward(self, x: torch.Tensor,token_positions:torch.Tensor) -> torch.Tensor:
 
         # 不能在原始的x上直接改
         out = x.clone()
-        for k in range(1,self.d_k // 2 + 1):
-            vec_x = x[...,2 * k - 2]
-            vec_y = x[...,2 * k - 1]
+        for k in range(0,self.d_k // 2):
+            vec_x = x[...,2 * k]
+            vec_y = x[...,2 * k + 1]
             # token_pos shape [batch,seq_len]
-            new_x = vec_x * self.cos_table[self.token_positions,k] - vec_y * self.sin_table[self.token_positions,k]
-            new_y = vec_y * self.cos_table[self.token_positions,k] + vec_x * self.sin_table[self.token_positions,k]
+            new_x = vec_x * self.cos_table[token_positions,k] - vec_y * self.sin_table[token_positions,k]
+            new_y = vec_y * self.cos_table[token_positions,k] + vec_x * self.sin_table[token_positions,k]
 
-            out[...,2 * k - 2] = new_x
-            out[...,2 * k - 1] = new_y
+            out[...,2 * k] = new_x
+            out[...,2 * k + 1] = new_y
         return out
                 
 
@@ -198,8 +195,7 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
 # @Param dtype: 数据类型
 # @Return: 多头自注意力层
 class MR_multihead_self_attention(nn.Module):
-    def __init__(self,d_model: int,num_heads: int,max_seq_len: int = 1024,theta:float | None = None,token_positions:torch.Tensor | None = None,
-                 device = None, dtype = None):
+    def __init__(self,d_model: int,num_heads: int,max_seq_len: int = 1024,theta:float | None = None,device = None, dtype = None):
         super().__init__()
         self.d_model = d_model
         self.num_heads = num_heads
@@ -212,20 +208,19 @@ class MR_multihead_self_attention(nn.Module):
         self.mask = torch.tril(torch.ones(max_seq_len, max_seq_len, dtype = torch.bool))
 
         # 权重
-        self.q_weight = MR_Model_linear(d_model,d_model)
-        self.k_weight = MR_Model_linear(d_model,d_model)
-        self.v_weight = MR_Model_linear(d_model,d_model)
-        self.o_weight = MR_Model_linear(d_model,d_model)
+        self.q_proj = MR_Model_linear(d_model,d_model)
+        self.k_proj = MR_Model_linear(d_model,d_model)
+        self.v_proj = MR_Model_linear(d_model,d_model)
+        self.output_proj = MR_Model_linear(d_model,d_model)
 
-        self.theta = theta
-        self.token_positions = token_positions
-        if theta is not None and token_positions is not None:
-            self.rope = MR_RoPE(theta,self.d_k,self.max_seq_len,device = self.device)
-            self.rope.load_state_dict({"token_positions": self.token_positions})
+        if theta is not None:
+            self.rope = MR_RoPE(theta,self.d_k,self.max_seq_len,device,dtype)
+        else:
+            self.rope = None
 
-    def forward(self,x:torch.Tensor) -> torch.Tensor:
-        # [...,s,dq/dk/dv]
-        q,k,v = self.q_weight(x),self.k_weight(x),self.v_weight(x)
+    def forward(self,x:torch.Tensor,token_positions:torch.Tensor | None = None) -> torch.Tensor:
+        # (...,s,dq/dk/dv)
+        q,k,v = self.q_proj(x),self.k_proj(x),self.v_proj(x)
         # single_head_attention
         per_q = rearrange(q,"... seq (h per_dq) -> ... seq h per_dq",h = self.num_heads)
         per_k = rearrange(k,"... seq (h per_dk) -> ... seq h per_dk",h = self.num_heads)
@@ -236,15 +231,15 @@ class MR_multihead_self_attention(nn.Module):
         s_v = rearrange(per_v,"... s h d -> ... h s d")
 
         # RoPE
-        if self.theta is not None and self.token_positions is not None:
-            s_q = self.rope.forward(s_q)
-            s_k = self.rope.forward(s_k)
+        if self.rope is not None and token_positions is not None:
+            s_q = self.rope.forward(s_q,token_positions)
+            s_k = self.rope.forward(s_k,token_positions)
 
         mask = self.mask[:x.size(-2),:x.size(-2)]
         ret = scaled_dot_product_attention(s_q,s_k,s_v,mask)
         ret = rearrange(ret,"... h s per_dv -> ... s (h per_dv)")
         # [...,s,d_v] @ [d_model,d_v].T
-        return self.o_weight(ret)
+        return self.output_proj(ret)
 
 
 # @Author: MingrHu
@@ -263,25 +258,11 @@ class MR_transformer_block(nn.Module):
         super().__init__()
         self.device = device
         self.dtype = dtype
-        self.mut_out_weight = MR_Model_linear(d_model,d_model)
-        self.ln_weight1 = MR_Model_linear(1,d_model)
-        self.ln_weight2 = MR_Model_linear(1,d_model)
-
-        # 权重
-        self.ln_weight1 = MR_Model_linear(1,d_model)
-        self.ln_weight2 = MR_Model_linear(1,d_model)
-        self.q_weight = MR_Model_linear(d_model,d_model)
-        self.k_weight = MR_Model_linear(d_model,d_model)
-        self.v_weight = MR_Model_linear(d_model,d_model)
-        self.o_weight = MR_Model_linear(d_model,d_model)
-        self.ffn_weight1 = MR_Model_linear(d_model,d_ff)
-        self.ffn_weight2 = MR_Model_linear(d_ff,d_model)
-        self.ffn_weight3 = MR_Model_linear(d_model,d_ff)
 
         # 一些子模块初始化
         self.ln1 = MR_RMSNorm(d_model,device = device,dtype = dtype)
         self.ln2 = MR_RMSNorm(d_model,device = device,dtype = dtype)
-        self.mha = MR_multihead_self_attention(d_model,num_heads,max_seq_len,theta,device = device,dtype = dtype)
+        self.attn = MR_multihead_self_attention(d_model,num_heads,max_seq_len,theta,device = device,dtype = dtype)
         self.ffn = MR_SwiGLU(d_model,d_ff,device = device,dtype = dtype)
 
     # x shape (batch sequence_length d_model)
@@ -289,16 +270,15 @@ class MR_transformer_block(nn.Module):
     def forward(self,x:torch.Tensor) -> torch.Tensor:
         # 1 LayerNorm1
         fx1 = self.ln1(x)
-        batch_size = x.shape[0]
-        seq_len = x.shape[1]
 
         # 生成token_positions
+        batch_size = x.shape[0]
+        seq_len = x.shape[1]
         token_positions = torch.arange(seq_len,device = self.device,dtype = self.dtype)
         token_positions = token_positions.repeat(batch_size,1)
 
         # 2 MHA
-        self.mha.token_positions = token_positions
-        mha_out = self.mha(fx1)
+        mha_out = self.attn(fx1,token_positions)
 
         # Add
         y1 = mha_out + x
@@ -316,36 +296,32 @@ class MR_transformer_block(nn.Module):
 
 
 class MR_transformer_lm(nn.Module):
-    def __init__(self,vocab_size:int,context_length:int,d_model:int,num_layers:int,num_heads:int,d_ff:int,rope_theta:float,
-                in_indices:torch.Tensor,weights:dict[str,torch.Tensor],device = None, dtype = None):
+    def __init__(self,vocab_size:int,context_length:int,d_model:int,num_layers:int,num_heads:int,d_ff:int,rope_theta:float,device = None, dtype = None):
         super().__init__()
-        token_embeddings = weights["token_embeddings.weight"]
-        # [vocab_size,d_model]  [batch,seq_len] = [batch,seq_len,d_model]
-        in_features = token_embeddings[in_indices]
+        self.num_layers = num_layers
+        # 基础组件
+        self.lm_head = MR_Model_linear(d_model,vocab_size)
+        self.ln_final = MR_RMSNorm(d_model)
+        self.token_embeddings = MR_Embedding(vocab_size,d_model)
 
-        for i in range(num_layers):
-            q_weight = weights[f"layers.{i}.attn.q_proj.weight"]
-            k_weight = weights[f"layers.{i}.attn.k_proj.weight"]
-            v_weight = weights[f"layers.{i}.attn.v_proj.weight"]
-            mut_out_weight = weights[f"layers.{i}.attn.output_proj.weight"]
-            ln_weight1 = weights[f"layers.{i}.ln1.weight"]
-            ln_weight2 = weights[f"layers.{i}.ln2.weight"]
-            ffn_weight1 = weights[f"layers.{i}.ffn.w1.weight"]
-            ffn_weight2 = weights[f"layers.{i}.ffn.w2.weight"]
-            ffn_weight3 = weights[f"layers.{i}.ffn.w3.weight"]
-            
-            transformer_block = MR_transformer_block(d_model,num_heads,d_ff,context_length,rope_theta,q_weight,k_weight,v_weight,
-                                                         mut_out_weight,ln_weight1,ln_weight2,ffn_weight1,ffn_weight2,ffn_weight3)
-            in_features = transformer_block.forward(in_features)
-    
-        self.in_features = in_features
-        self.ln_final_weight = weights["ln_final.weight"]
-        self.out_weight = weights["lm_head.weight"]
-        self.ln_final_fx = MR_RMSNorm(d_model)
+        # 这里用了ModuleList方法
+        self.layers = nn.ModuleList([
+            MR_transformer_block(d_model, num_heads, d_ff, context_length, rope_theta)
+            for _ in range(num_layers)
+        ])
         
 
-    def forward(self)->torch.Tensor:
-        ln_final = self.ln_final_fx.forward(self.in_features,self.ln_final_weight)  
-        # [b,s,d] @ [vocab_size,d_model].T
-        liner_ret = ln_final @ self.out_weight.T
-        return liner_ret
+    def forward(self,in_indices:torch.Tensor)->torch.Tensor:
+        # 1 获取输入
+        # (vocab_size,d_model)  (batch,seq_len) = (batch,seq_len,d_model)
+        x = self.token_embeddings(in_indices)
+
+        # 2 执行block
+        for layer in self.layers:
+            x = layer(x)
+        
+        # 3 补充一个归一化
+        x = self.ln_final(x)
+
+        # 4 输出lm head
+        return self.lm_head(x)
