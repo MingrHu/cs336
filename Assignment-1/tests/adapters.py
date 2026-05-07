@@ -58,7 +58,35 @@ def run_embedding(
     embedding.load_state_dict({"embedding":weights})
     return embedding.forward(token_ids)
 
-# FFN前向传播层✅
+
+# 归一化✅
+def run_rmsnorm(
+    d_model: int,
+    eps: float,
+    weights: Float[Tensor, " d_model"],
+    in_features: Float[Tensor, " ... d_model"],
+) -> Float[Tensor, " ... d_model"]:
+    """Given the weights of a RMSNorm affine transform,
+    return the output of running RMSNorm on the input features.
+
+    Args:
+        d_model (int): The dimensionality of the RMSNorm input.
+        eps: (float): A value added to the denominator for numerical stability.
+        weights (Float[Tensor, "d_model"]): RMSNorm weights.
+        in_features (Float[Tensor, "... d_model"]): Input features to run RMSNorm on. Can have arbitrary leading
+            dimensions.
+
+    Returns:
+        Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
+        RMSNorm of the `in_features`.
+    """
+    # 逐元素相乘
+    rmsn = transformer.MR_RMSNorm(d_model,eps)
+    rmsn.load_state_dict({"weight": weights})
+    return rmsn.forward(in_features)
+
+
+# FFN神经网络层✅
 def run_swiglu(
     d_model: int,
     d_ff: int,
@@ -88,8 +116,57 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    swiglu = transformer.MR_SwiGLU(d_model,d_ff,w1_weight,w2_weight,w3_weight)
+    weights = {
+        "weight1.weight": w1_weight,
+        "weight2.weight": w2_weight,
+        "weight3.weight": w3_weight,
+    }
+    swiglu = transformer.MR_SwiGLU(d_model,d_ff)
+    swiglu.load_state_dict(weights)
     return swiglu.forward(in_features)
+
+
+# 旋转位置编码RoPE✅
+def run_rope(
+    d_k: int,
+    theta: float,
+    max_seq_len: int,
+    in_query_or_key: Float[Tensor, " ... sequence_length d_k"],
+    token_positions: Int[Tensor, " ... sequence_length"],
+) -> Float[Tensor, " ... sequence_length d_k"]:
+    """
+    Run RoPE for a given input tensor.
+
+    Args:
+        d_k (int): Embedding dimension size for the query or key tensor.
+        theta (float): RoPE parameter.
+        max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
+        in_query_or_key (Float[Tensor, "... sequence_length d_k"]): Input tensor to run RoPE on.
+        token_positions (Int[Tensor, "... sequence_length"]): Tensor of shape (batch_size, sequence_length) with the token positions
+    Returns:
+        Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
+    """
+    rope = transformer.MR_RoPE(theta,d_k,max_seq_len)
+    rope.load_state_dict({"token_positions": token_positions})
+    return rope.forward(in_query_or_key)
+
+
+# softmax概率✅
+def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
+    """
+    Given a tensor of inputs, return the output of softmaxing the given `dim`
+    of the input.
+
+    Args:
+        in_features (Float[Tensor, "..."]): Input features to softmax. Shape is arbitrary.
+        dim (int): Dimension of the `in_features` to apply softmax to.
+
+    Returns:
+        Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
+        softmax normalizing the specified `dim`.
+    """
+    sf_mx = transformer.softmax(in_features,dim = dim)
+    return sf_mx
 
 
 # Scaled Dot Product Attention✅
@@ -194,28 +271,7 @@ def run_multihead_self_attention_with_rope(
     return mut_attention_with_rope.forward(in_features,o_proj_weight)
     
 
-# 旋转位置编码RoPE✅
-def run_rope(
-    d_k: int,
-    theta: float,
-    max_seq_len: int,
-    in_query_or_key: Float[Tensor, " ... sequence_length d_k"],
-    token_positions: Int[Tensor, " ... sequence_length"],
-) -> Float[Tensor, " ... sequence_length d_k"]:
-    """
-    Run RoPE for a given input tensor.
 
-    Args:
-        d_k (int): Embedding dimension size for the query or key tensor.
-        theta (float): RoPE parameter.
-        max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
-        in_query_or_key (Float[Tensor, "... sequence_length d_k"]): Input tensor to run RoPE on.
-        token_positions (Int[Tensor, "... sequence_length"]): Tensor of shape (batch_size, sequence_length) with the token positions
-    Returns:
-        Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
-    """
-    rope = transformer.MR_RoPE(theta,d_k,max_seq_len)
-    return rope.forward(in_query_or_key,token_positions)
 
 
 # Transformer Block✅
@@ -304,6 +360,7 @@ def run_transformer_block(
     return transformer_block.forward(in_features)
 
 
+# Transformer lm✅
 def run_transformer_lm(
     vocab_size: int,
     context_length: int,
@@ -386,31 +443,6 @@ def run_transformer_lm(
     transformer_lm = transformer.MR_transformer_lm(vocab_size,context_length,d_model,num_layers,num_heads,d_ff,rope_theta,in_indices,weights)
     return transformer_lm.forward()
 
-# 归一化✅
-def run_rmsnorm(
-    d_model: int,
-    eps: float,
-    weights: Float[Tensor, " d_model"],
-    in_features: Float[Tensor, " ... d_model"],
-) -> Float[Tensor, " ... d_model"]:
-    """Given the weights of a RMSNorm affine transform,
-    return the output of running RMSNorm on the input features.
-
-    Args:
-        d_model (int): The dimensionality of the RMSNorm input.
-        eps: (float): A value added to the denominator for numerical stability.
-        weights (Float[Tensor, "d_model"]): RMSNorm weights.
-        in_features (Float[Tensor, "... d_model"]): Input features to run RMSNorm on. Can have arbitrary leading
-            dimensions.
-
-    Returns:
-        Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
-        RMSNorm of the `in_features`.
-    """
-    # 逐元素相乘
-    rmsn = transformer.MR_RMSNorm(d_model,eps)
-    return rmsn.forward(in_features,weights)
-
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
     """Given a tensor of inputs, return the output of applying SiLU
@@ -447,23 +479,6 @@ def run_get_batch(
         language modeling labels.
     """
     raise NotImplementedError
-
-# softmax概率✅
-def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
-    """
-    Given a tensor of inputs, return the output of softmaxing the given `dim`
-    of the input.
-
-    Args:
-        in_features (Float[Tensor, "..."]): Input features to softmax. Shape is arbitrary.
-        dim (int): Dimension of the `in_features` to apply softmax to.
-
-    Returns:
-        Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
-        softmax normalizing the specified `dim`.
-    """
-    sf_mx = transformer.softmax(in_features,dim = dim)
-    return sf_mx
 
 
 def run_cross_entropy(
