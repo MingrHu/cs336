@@ -219,7 +219,7 @@ class MR_multihead_self_attention(nn.Module):
             self.rope = None
 
     def forward(self,x:torch.Tensor,token_positions:torch.Tensor | None = None) -> torch.Tensor:
-        # (...,s,dq/dk/dv)
+        # (...,s,dq/dk/dv) 矩阵投影
         q,k,v = self.q_proj(x),self.k_proj(x),self.v_proj(x)
         # single_head_attention
         per_q = rearrange(q,"... seq (h per_dq) -> ... seq h per_dq",h = self.num_heads)
