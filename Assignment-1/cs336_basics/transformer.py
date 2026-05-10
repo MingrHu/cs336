@@ -182,6 +182,8 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
     attention = softmax(score,dim = -1)
     return attention @ v
 
+def cross_entropy_loss()
+
 
 # @Author: MingrHu
 # @Date: 2026-05-06
