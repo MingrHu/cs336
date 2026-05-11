@@ -8,7 +8,7 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-from cs336_basics import bpe,tokenizer,transformer
+from cs336_basics import bpe,tokenizer,transformer,helper
 
 
 # 线形层✅ 
@@ -164,7 +164,7 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    sf_mx = transformer.softmax(in_features,dim = dim)
+    sf_mx = helper.softmax(in_features,dim = dim)
     return sf_mx
 
 
@@ -497,7 +497,8 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    loss = helper.cross_entropy_loss(inputs,targets)
+    return loss
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
