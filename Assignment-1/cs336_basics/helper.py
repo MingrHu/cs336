@@ -1,4 +1,4 @@
-import torch
+import torch,math
 from collections.abc import Callable, Iterable
 from typing import Optional
 
@@ -41,7 +41,7 @@ def cross_entropy_loss(x: torch.Tensor,target: torch.Tensor):
 
 
 class MR_adamw_opt(torch.optim.Optimizer):
-    # 例如给 backbone 和 head 设置不同的学习率
+    # 示例 
     # opt = torch.optim.SGD([
     #     {"params": model.backbone.parameters(), "lr": 0.001},
     #     {"params": model.head.parameters(), "lr": 0.01}
@@ -55,11 +55,34 @@ class MR_adamw_opt(torch.optim.Optimizer):
         }
         super().__init__(params,defaults)
 
-    def step(self, closure: Optional[Callable] = None):
+    def step(self, closure: Optional[Callable[[], float]] = None) -> Optional[float]: # type: ignore
         loss = None if closure is None else closure()
 
         for group in self.param_groups:
             lr = group["lr"]
+            betas = group["betas"]
+            eps = group["eps"]
+            weight_decay = group["weight_decay"]
+            beta1, beta2 = betas
+            for param in group["params"]:
+                if param.grad is None:
+                    continue
+                state = self.state[param]
+                # 获取当前步
+                st = state.get("st", 0) + 1
+                m = state.get("m", torch.zeros_like(param.grad))
+                v = state.get("v", torch.zeros_like(param.grad))
+                grad = param.grad.data
 
+                m1 = beta1 * m + (1 - beta1) * grad
+                v1 = beta2 * v + (1 - beta2) * grad ** 2
+                lr_t = lr *(math.sqrt(1.0 - beta2 ** st) / (1.0 - beta1 ** st))
+                param.data -= lr_t * (m1 / (torch.sqrt(v1) + eps))
+                param.data *= (1 - weight_decay * lr)
+                
+                # 存储state
+                state["m"] = m1
+                state["v"] = v1
+                state["st"] = st
 
         return loss
