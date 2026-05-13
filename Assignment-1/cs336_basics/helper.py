@@ -1,4 +1,6 @@
-import torch,math
+import torch,math,os,typing
+import numpy as np
+import torch.nn as nn 
 from collections.abc import Callable, Iterable
 from typing import Optional
 
@@ -86,3 +88,68 @@ class MR_adamw_opt(torch.optim.Optimizer):
                 state["st"] = st
 
         return loss
+
+
+def learning_rate_schedule(t:int,amax:float,amin:float,Tw:int,Tc:int):
+    if t < Tw:
+        return t / Tw * amax
+    elif Tw <= t and t <= Tc:
+        return amin + (1 + math.cos((t - Tw) / (Tc - Tw) * math.pi)) * (amax - amin) / 2
+    elif t > Tc:
+        return amin
+    else:
+        raise ValueError("Invalid params!")
+    
+
+def gradient_clipping(params: Iterable[torch.nn.Parameter], max_l2_norm: float,eps = 1e-6):
+    l2:float = 0
+    g2:float = 0
+    for it in params:
+        if it.grad != None:
+            g2 += (it.grad ** 2).sum().item() 
+    l2 = math.sqrt(g2)
+    for it in params:
+        if it.grad != None and l2 > max_l2_norm:
+            it.grad *= max_l2_norm / (eps + l2)
+
+
+# 输入的数据集是token ids
+def data_loading(dataset:np.ndarray, batch_size: int, context_length: int, device: str)->tuple[torch.Tensor, torch.Tensor]:
+    X = torch.zeros(
+        (batch_size,context_length),
+        dtype = torch.int32
+    )
+    Y = torch.zeros(
+        (batch_size,context_length),
+        dtype = torch.int32
+    )
+
+    # np是[ )
+    smp_idx = np.random.randint(0,len(dataset) - context_length,batch_size)
+    for i,idx in enumerate(smp_idx):
+        chunk = dataset[idx:idx + context_length + 1] 
+        x = chunk[:-1]
+        y = chunk[1:]
+        X[i] = torch.from_numpy(x)
+        Y[i] = torch.from_numpy(y)
+    return (X,Y)
+
+
+def save_checkpoint(model:nn.Module, optimizer:torch.optim.Optimizer, iteration:int, 
+                    out:str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+):
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "iteration": iteration
+    }
+    torch.save(checkpoint,out)
+  
+    
+def load_checkpoint(src:str | os.PathLike | typing.BinaryIO | typing.IO[bytes], 
+                    model:nn.Module, optimizer:torch.optim.Optimizer)->int:
+    checkpoint = torch.load(src)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    return checkpoint["iteration"]
+    
