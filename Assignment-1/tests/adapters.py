@@ -458,7 +458,7 @@ def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
     """
     return in_features * torch.sigmoid(in_features)
 
-
+# 数据加载器✅
 def run_get_batch(
     dataset: npt.NDArray, batch_size: int, context_length: int, device: str
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -481,7 +481,7 @@ def run_get_batch(
     """
     return helper.data_loading(dataset,batch_size,context_length,device)
 
-
+# 交叉熵损失✅
 def run_cross_entropy(
     inputs: Float[Tensor, " batch_size vocab_size"], targets: Int[Tensor, " batch_size"]
 ) -> Float[Tensor, ""]:
@@ -501,6 +501,7 @@ def run_cross_entropy(
     return loss
 
 
+# 梯度裁剪✅
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
     """Given a set of parameters, clip their combined gradients to have l2 norm at most max_l2_norm.
 
@@ -513,6 +514,7 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
     op = helper.gradient_clipping(parameters,max_l2_norm)
 
 
+# AdamW优化器✅
 def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
@@ -520,6 +522,7 @@ def get_adamw_cls() -> Any:
     return helper.MR_adamw_opt
 
 
+# 学习率调度器✅
 def run_get_lr_cosine_schedule(
     it: int,
     max_learning_rate: float,
@@ -547,7 +550,7 @@ def run_get_lr_cosine_schedule(
     """
     return helper.learning_rate_schedule(it,max_learning_rate,min_learning_rate,warmup_iters,cosine_cycle_iters)
 
-
+# 保存检查点✅
 def run_save_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
@@ -567,6 +570,7 @@ def run_save_checkpoint(
     helper.save_checkpoint(model,optimizer,iteration,out)
 
 
+# 加载检查点✅
 def run_load_checkpoint(
     src: str | os.PathLike | BinaryIO | IO[bytes],
     model: torch.nn.Module,

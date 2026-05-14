@@ -15,11 +15,19 @@ def softmax(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return torch.exp(x - max_val) / torch.exp(x - max_val).sum(dim = dim,keepdim = True)
 
 
-# (batch_size, ..., seq_len, d_q)
-# (batch_size, ..., seq_len, d_k)
-# (batch_size, ..., seq_len, d_v)
-# (batch_size, ..., seq_len, seq_len)
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建缩放点积注意力层
+# @Param q: 查询张量
+# @Param k: 键张量
+# @Param v: 值张量
+# @Param mask: 掩码张量
+# @Return: 注意力张量
 def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor,mask: torch.Tensor | None = None):
+    # (batch_size, ..., seq_len, d_q)
+    # (batch_size, ..., seq_len, d_k)
+    # (batch_size, ..., seq_len, d_v)
+    # (batch_size, ..., seq_len, seq_len)
     qk_dot = q @ k.transpose(-2,-1)
     d_k = k.shape[-1] 
     score = qk_dot / torch.sqrt(torch.tensor(d_k))
@@ -30,8 +38,14 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
     return attention @ v
 
 
-# (b × s,vocab_size) (b)
+# @Author: MingrHu
+# @Date: 2026-05-06
+# @Description: 构建交叉熵损失层
+# @Param x: 输入张量
+# @Param target: 目标位置张量
+# @Return: 交叉熵损失
 def cross_entropy_loss(x: torch.Tensor,target: torch.Tensor):
+    # (b × s,vocab_size) (b)
     # 分子直接简化
     tar_x = x[torch.arange(len(target)),target] 
 
@@ -42,6 +56,15 @@ def cross_entropy_loss(x: torch.Tensor,target: torch.Tensor):
     return (torch.log(exp_sum_x) - tar_x + max_val).mean()
 
 
+# @Author: MingrHu
+# @Date: 2026-05-14
+# @Description: 构建AdamW优化器
+# @Param params: 参数列表
+# @Param lr: 学习率
+# @Param betas: Adam优化器参数
+# @Param eps: Adam优化器参数
+# @Param weight_decay: 权重衰减
+# @Return: AdamW优化器
 class MR_adamw_opt(torch.optim.Optimizer):
     # 示例 
     # opt = torch.optim.SGD([
@@ -90,6 +113,15 @@ class MR_adamw_opt(torch.optim.Optimizer):
         return loss
 
 
+# @Author: MingrHu
+# @Date: 2026-05-14
+# @Description: 构建学习率调度器
+# @Param t: 当前步
+# @Param amax: 最大学习率
+# @Param amin: 最小学习率
+# @Param Tw: 学习率衰减步长
+# @Param Tc: 学习率衰减步长
+# @Return: 学习率
 def learning_rate_schedule(t:int,amax:float,amin:float,Tw:int,Tc:int):
     if t < Tw:
         return t / Tw * amax
@@ -99,8 +131,15 @@ def learning_rate_schedule(t:int,amax:float,amin:float,Tw:int,Tc:int):
         return amin
     else:
         raise ValueError("Invalid params!")
-    
 
+
+# @Author: MingrHu
+# @Date: 2026-05-14
+# @Description: 构建梯度裁剪层
+# @Param params: 参数列表
+# @Param max_l2_norm: 最大梯度范数
+# @Param eps: 小常数
+# @Return: None
 def gradient_clipping(params: Iterable[torch.nn.Parameter], max_l2_norm: float,eps = 1e-6):
     l2:float = 0
     g2:float = 0
@@ -112,16 +151,22 @@ def gradient_clipping(params: Iterable[torch.nn.Parameter], max_l2_norm: float,e
         if it.grad != None and l2 > max_l2_norm:
             it.grad *= max_l2_norm / (eps + l2)
 
-
-# 输入的数据集是token ids
+# @Author: MingrHu
+# @Date: 2026-05-14
+# @Description: 构建数据加载器
+# @Param dataset: 数据集 # 输入的数据集是token ids
+# @Param batch_size: 批量大小
+# @Param context_length: 上下文长度
+# @Param device: CPU/GPU
+# @Return: 数据加载器
 def data_loading(dataset:np.ndarray, batch_size: int, context_length: int, device: str)->tuple[torch.Tensor, torch.Tensor]:
     X = torch.zeros(
         (batch_size,context_length),
-        dtype = torch.int32
+        dtype = torch.long
     )
     Y = torch.zeros(
         (batch_size,context_length),
-        dtype = torch.int32
+        dtype = torch.long
     )
 
     # np是[ )
@@ -132,9 +177,19 @@ def data_loading(dataset:np.ndarray, batch_size: int, context_length: int, devic
         y = chunk[1:]
         X[i] = torch.from_numpy(x)
         Y[i] = torch.from_numpy(y)
+    X = X.to(device)
+    Y = Y.to(device)
     return (X,Y)
 
 
+# @Author: MingrHu
+# @Date: 2026-05-14
+# @Description: 保存模型检查点
+# @Param model: 模型
+# @Param optimizer: 优化器
+# @Param iteration: 当前迭代次数
+# @Param out: 输出路径
+# @Return: None
 def save_checkpoint(model:nn.Module, optimizer:torch.optim.Optimizer, iteration:int, 
                     out:str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
 ):
@@ -145,7 +200,14 @@ def save_checkpoint(model:nn.Module, optimizer:torch.optim.Optimizer, iteration:
     }
     torch.save(checkpoint,out)
   
-    
+
+# @Author: MingrHu
+# @Date: 2026-05-14
+# @Description: 加载模型检查点
+# @Param src: 输入路径
+# @Param model: 模型
+# @Param optimizer: 优化器
+# @Return: 当前迭代次数
 def load_checkpoint(src:str | os.PathLike | typing.BinaryIO | typing.IO[bytes], 
                     model:nn.Module, optimizer:torch.optim.Optimizer)->int:
     checkpoint = torch.load(src)
