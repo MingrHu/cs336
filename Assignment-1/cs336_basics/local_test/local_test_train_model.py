@@ -16,9 +16,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description = "Start to train a MR-Transformer-LM")
 
     # MR-Transformer-LM模型参数
-    parser.add_argument("--d_model", type = int, default = 64)
-    parser.add_argument("--num_heads", type = int, default = 2)
-    parser.add_argument("--num_layers", type = int, default = 2)
+    parser.add_argument("--d_model", type = int, default = 1024)
+    parser.add_argument("--num_heads", type = int, default = 8)
+    parser.add_argument("--num_layers", type = int, default = 16)
     parser.add_argument("--d_ff", type = int, default = 128)
     parser.add_argument("--context_length", type = int, default = 16)
     parser.add_argument("--vocab_size", type = int, default = 10000)
