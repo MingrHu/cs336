@@ -42,7 +42,6 @@ def parse_args():
     parser.add_argument("--warmup_steps", type = int, default = 2000)
     parser.add_argument("--max_steps", type = int, default = 100000)
 
-
     # 日志/检查点/评估参数
     parser.add_argument("--log_interval", type = int, default = 10)
     parser.add_argument("--save_interval", type = int, default = 1000)
@@ -108,8 +107,6 @@ def main():
         start_step = helper.load_checkpoint(args.checkpoint_path, model, optimizer) + 1
     
     # 训练循环
-    model.train()
-
     for step in range(start_step, args.num_steps):
         # 训练 step
         x, y = helper.data_loading(train_data, args.batch_size, args.context_length, args.device)
@@ -129,7 +126,6 @@ def main():
         
         # 验证
         if step % args.eval_interval == 0:
-            model.eval()
             with torch.no_grad():
                 x_val, y_val = helper.data_loading(val_data, args.batch_size, args.context_length, args.device)
                 logits_val = model(x_val)

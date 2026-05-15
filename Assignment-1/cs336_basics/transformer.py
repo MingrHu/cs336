@@ -24,6 +24,7 @@ class MR_Model_linear(nn.Module):
         std = torch.sqrt(2 / torch.tensor(in_features + out_features)).item()
         # 参考Task的初始化方法
         weight = nn.init.trunc_normal_(weight,0,std,-3 * std,3 * std)
+        weight = weight.to(device)
         # register
         self.weight = nn.Parameter(weight)
 
@@ -135,17 +136,22 @@ class MR_RoPE(nn.Module):
         self.d_k = d_model
 
         inv_freq = 1.0 / (theta ** (torch.arange(0,d_model,2).float() / d_model))
-        seq_i = torch.arange(max_seq_len).float()
+        seq_i = torch.arange(max_seq_len).float().to(device)
         # (max_seq_len,1) @ (1,d_model // 2)
         theta_ik = seq_i.reshape(-1,1) @ inv_freq.reshape(1,-1)
 
-        self.cos_table = torch.cos(theta_ik)
-        self.sin_table = torch.sin(theta_ik)
+        # self.cos_table = torch.cos(theta_ik)
+        # self.sin_table = torch.sin(theta_ik)
+        self.cos_table: torch.Tensor
+        self.sin_table: torch.Tensor
+        self.register_buffer("cos_table", torch.cos(theta_ik))
+        self.register_buffer("sin_table", torch.sin(theta_ik))
 
     def forward(self, x: torch.Tensor,token_positions:torch.Tensor) -> torch.Tensor:
 
         # 不能在原始的x上直接改
         out = x.clone()
+        # TODO 性能问题 后续优化
         for k in range(0,self.d_k // 2):
             vec_x = x[...,2 * k]
             vec_y = x[...,2 * k + 1]
@@ -180,7 +186,7 @@ class MR_multihead_self_attention(nn.Module):
         self.d_k = d_model // num_heads
         
         # mask 下三角矩阵 
-        self.mask = torch.tril(torch.ones(max_seq_len, max_seq_len, dtype = torch.bool))
+        self.mask = torch.tril(torch.ones(max_seq_len, max_seq_len, dtype = torch.bool,device = device))
 
         # 权重
         self.q_proj = MR_Model_linear(d_model,d_model)

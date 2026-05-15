@@ -215,3 +215,44 @@ def load_checkpoint(src:str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     return checkpoint["iteration"]
     
+
+
+def lm_decode(model:nn.Module,prompt_ids:torch.Tensor,max_gen_tokens:int,eof_token:int,device = 'cpu',
+              tmp:float|None = None,top_p:float| None = None):
+    
+    prompt_ids = prompt_ids.to(device)
+    generated_ids = prompt_ids.clone()
+
+    for _ in range(max_gen_tokens):
+        # shape (b,s,vocab_size)
+        logits = model(generated_ids)
+        logits = logits[:,-1,:] # (b,s,v)->(b,v)
+
+        # 温度缩放
+        if tmp != None:
+            logits = logits / tmp
+        prob = softmax(logits)
+
+        # Top-p
+        if top_p != None:
+            # 降序 + 前缀和
+            soret,idxs = torch.sort(prob,descending = True) 
+            predix = torch.cumsum(soret,dim = -1)
+
+            mask = predix <= top_p
+            mask[:,0] = True
+            
+            new_prob = soret * mask.float()
+            final_prob = new_prob / new_prob.sum(dim = -1,keepdim = True) 
+            pos = torch.multinomial(final_prob, num_samples = 1)
+            next_token_id = torch.gather(idxs, -1, pos)
+        else:
+            next_token_id = torch.multinomial(prob, num_samples = 1)
+        # 按照最后一维拼接
+        generated_ids = torch.cat([generated_ids,next_token_id],dim = -1)
+        
+        if eof_token != None and next_token_id.item() == eof_token:
+            break
+    return generated_ids
+
+
