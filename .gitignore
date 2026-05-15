@@ -162,4 +162,5 @@ cython_debug/
 .ruff_cache/
 *.zip
 /Assignment-1/data
+/Assignment-1/output
 /wandb
