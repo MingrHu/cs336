@@ -185,10 +185,10 @@ class MR_multihead_self_attention(nn.Module):
         self.mask = torch.tril(torch.ones(max_seq_len, max_seq_len, dtype = torch.bool,device = device))
 
         # 权重
-        self.q_proj = MR_Model_linear(d_model,d_model)
-        self.k_proj = MR_Model_linear(d_model,d_model)
-        self.v_proj = MR_Model_linear(d_model,d_model)
-        self.output_proj = MR_Model_linear(d_model,d_model)
+        self.q_proj = MR_Model_linear(d_model,d_model,device = device,dtype = dtype)
+        self.k_proj = MR_Model_linear(d_model,d_model,device = device,dtype = dtype)
+        self.v_proj = MR_Model_linear(d_model,d_model,device = device,dtype = dtype)
+        self.output_proj = MR_Model_linear(d_model,d_model,device = device,dtype = dtype)
 
         if theta is not None:
             self.rope = MR_RoPE(theta,self.d_k,self.max_seq_len,device,dtype)
@@ -277,9 +277,9 @@ class MR_transformer_lm(nn.Module):
         super().__init__()
         self.num_layers = num_layers
         # 基础组件
-        self.lm_head = MR_Model_linear(d_model,vocab_size)
-        self.ln_final = MR_RMSNorm(d_model)
-        self.token_embeddings = MR_Embedding(vocab_size,d_model)
+        self.lm_head = MR_Model_linear(d_model,vocab_size,device = device,dtype = dtype)
+        self.ln_final = MR_RMSNorm(d_model,device = device,dtype = dtype)
+        self.token_embeddings = MR_Embedding(vocab_size,d_model,device = device,dtype = dtype)
 
         # 这里用了ModuleList方法
         self.layers = nn.ModuleList([

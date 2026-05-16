@@ -105,7 +105,7 @@ def handle_bpe_func(input_path:str,start:int,end:int,sp_tokens:list[str],q:multi
 
 
 #####################Tokenizer multiple process#####################
-def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[bytes,int],vocab:dict[int,bytes])->list[int]:
+def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[bytes,int],max_level:int)->list[int]:
     tokens:list[bytes] = []
     parts:list[str] = []
     sp_tokens:list[str] = sorted(special_tokens,key = len,reverse=True)
@@ -139,7 +139,6 @@ def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[byte
             continue
         text_bytes = tuple(bytes([b]) for b in token)
         while True:
-            max_level = len(vocab)
             merge_rule:bytes = b""
             for idx in range(len(text_bytes) - 1):
                 pair = text_bytes[idx] + text_bytes[idx+1]
@@ -165,9 +164,9 @@ def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[byte
     return ret
 
 def handle_tokenizer_func(input_path:str,start:int,end:int,sp_tokens:list[str],
-                          dic_token_id:dict[bytes,int],vocab:dict[int,bytes],q:multiprocessing.Queue):
+                          dic_token_id:dict[bytes,int],vocab:dict[int,bytes],q:multiprocessing.Queue,chunk_idx:int):
     with open(input_path,'rb') as f:
         f.seek(start)
         data = f.read(end - start)
-        chunk = data.decode("utf-8", errors="ignore")
-        q.put(exec_tokenizer_func(sp_tokens,chunk,dic_token_id,vocab))
+        chunk = data.decode("utf-8", errors = "ignore")
+        q.put((chunk_idx,exec_tokenizer_func(sp_tokens,chunk,dic_token_id,vocab)))

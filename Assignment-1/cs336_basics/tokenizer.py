@@ -57,7 +57,7 @@ class MR_Tokenizer:
         """将输入文本编码为词元ID序列"""
         if text == "":
             return []
-        ret:list[int] = exec_tokenizer_func(self.special_tokens,text,self.dic_token_id,self.vocab)
+        ret:list[int] = exec_tokenizer_func(self.special_tokens,text,self.dic_token_id,len(self.vocab))
         return ret
 
 
@@ -91,21 +91,25 @@ class MR_Tokenizer:
         with open(input_path, "rb") as f:
             boundaries = find_chunk_boundaries(f,8,[b.encode('utf-8') for b in self.special_tokens])
 
-        for start,end in zip(boundaries[:-1],boundaries[1:]):
+        for idx,(start,end) in enumerate(zip(boundaries[:-1],boundaries[1:])):
             p = multiprocessing.Process(
                 target = handle_tokenizer_func,
                 args =(input_path,start,end,
-                       self.special_tokens,self.dic_token_id,self.vocab,q))
+                       self.special_tokens,self.dic_token_id,len(self.vocab),q,idx))
             process_ins.append(p)
             p.start()
 
         size = len(process_ins)
+        temp_results= []
         print(f"---------共有{size}个进程运行，获得{size}个reduce-----------")
         for idx in range(size):
             print(f"🤔#####开始merge######🤓 当前处于第{idx + 1}个")
             # 每个reduce的结果都是一个list[int]
-            for val in q.get():
-                ret.append(val)
+            chunk_idx, token_list = q.get()
+            temp_results.append((chunk_idx, token_list))
+        
+        temp_results.sort(key = lambda x:x[0])
+        ret = [token for _,token_list in temp_results for token in token_list]
 
         for p in process_ins:
             p.join()

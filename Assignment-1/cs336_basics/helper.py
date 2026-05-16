@@ -30,7 +30,7 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
     # (batch_size, ..., seq_len, seq_len)
     qk_dot = q @ k.transpose(-2,-1)
     d_k = k.shape[-1] 
-    score = qk_dot / torch.sqrt(torch.tensor(d_k))
+    score = qk_dot / torch.sqrt(torch.tensor(d_k,device = q.device))
     # 自动广播 不要用inf 用-1e9
     if mask is not None:
         score = score + ((~mask) * -1e9)
@@ -47,7 +47,7 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
 def cross_entropy_loss(x: torch.Tensor,target: torch.Tensor):
     # (b × s,vocab_size) (b)
     # 分子直接简化
-    tar_x = x[torch.arange(len(target)),target] 
+    tar_x = x[torch.arange(len(target),device = target.device),target] 
 
     # 计算对数和 分母
     max_val = torch.max(x,dim = -1,keepdim = True).values
