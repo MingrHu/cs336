@@ -216,7 +216,17 @@ def load_checkpoint(src:str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
     return checkpoint["iteration"]
     
 
-
+# @Author: MingrHu
+# @Date: 2026-05-14
+# @Description: 模型解码
+# @Param model: 模型
+# @Param prompt_ids: 提示词
+# @Param max_gen_tokens: 最大生成token数
+# @Param eof_token: 结束符token
+# @Param device: CPU/GPU
+# @Param tmp: 温度缩放因子
+# @Param top_p: Top-p采样阈值
+# @Return: 生成的token ids
 def lm_decode(model:nn.Module,prompt_ids:torch.Tensor,max_gen_tokens:int,eof_token:int,device = 'cpu',
               tmp:float|None = None,top_p:float| None = None):
     

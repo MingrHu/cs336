@@ -11,7 +11,6 @@ from cs336_basics.helper import scaled_dot_product_attention
 # @Param device: CPU/GPU
 # @Param dtype: 数据类型
 # @Return: 线性变换模块
-# @FLOPs: 2 * m * n * p
 class MR_Model_linear(nn.Module):
     # shape: (batch_size,sequence_size,dim)
     # 构建线性变换模块
@@ -24,7 +23,6 @@ class MR_Model_linear(nn.Module):
         std = torch.sqrt(2 / torch.tensor(in_features + out_features)).item()
         # 参考Task的初始化方法
         weight = nn.init.trunc_normal_(weight,0,std,-3 * std,3 * std)
-        weight = weight.to(device)
         # register
         self.weight = nn.Parameter(weight)
 
@@ -40,7 +38,6 @@ class MR_Model_linear(nn.Module):
 # @Param device: CPU/GPU
 # @Param dtype: 数据类型
 # @Return: 嵌入层
-# @FLOPs: m * n
 class MR_Embedding(nn.Module):
     def __init__(self, num_embeddings:int, embedding_dim:int, device = None, dtype = None):
         super().__init__()
@@ -63,7 +60,6 @@ class MR_Embedding(nn.Module):
 # @Param device: CPU/GPU
 # @Param dtype: 数据类型
 # @Return: RMS归一化层
-# @FLOPS: m * n
 class MR_RMSNorm(nn.Module):
     def __init__(self, d_model: int, eps: float = 1e-5, device = None, dtype = None):
         super().__init__()
@@ -95,7 +91,6 @@ class MR_RMSNorm(nn.Module):
 # @Param device: CPU/GPU
 # @Param dtype: 数据类型
 # @Return: SwiGLU层
-# @FLOPs: 
 class MR_SwiGLU(nn.Module):
     def __init__(self,d_model: int,dff:int, device = None, dtype = None):
         super().__init__()
@@ -126,7 +121,6 @@ class MR_SwiGLU(nn.Module):
 # @Param d_model: 输入特征维度
 # @Param max_seq_len: 最大序列长度
 # @Param device: CPU/GPU
-# @Return: RoPE层
 class MR_RoPE(nn.Module):
     def __init__(self, theta: float, d_model: int, max_seq_len: int, device = None, dtype = None) :
         super().__init__()
@@ -136,16 +130,16 @@ class MR_RoPE(nn.Module):
         self.d_k = d_model
 
         inv_freq = 1.0 / (theta ** (torch.arange(0,d_model,2).float() / d_model))
-        seq_i = torch.arange(max_seq_len).float().to(device)
+        seq_i = torch.arange(max_seq_len).float()
         # (max_seq_len,1) @ (1,d_model // 2)
         theta_ik = seq_i.reshape(-1,1) @ inv_freq.reshape(1,-1)
 
-        # self.cos_table = torch.cos(theta_ik)
-        # self.sin_table = torch.sin(theta_ik)
-        self.cos_table: torch.Tensor
-        self.sin_table: torch.Tensor
-        self.register_buffer("cos_table", torch.cos(theta_ik))
-        self.register_buffer("sin_table", torch.sin(theta_ik))
+        self.cos_table = torch.cos(theta_ik)
+        self.sin_table = torch.sin(theta_ik)
+
+        # 移动到device 不注册参数
+        self.cos_table = self.cos_table.to(device)
+        self.sin_table = self.sin_table.to(device)
 
     def forward(self, x: torch.Tensor,token_positions:torch.Tensor) -> torch.Tensor:
 
@@ -156,8 +150,10 @@ class MR_RoPE(nn.Module):
             vec_x = x[...,2 * k]
             vec_y = x[...,2 * k + 1]
             # token_pos shape [batch,seq_len]
-            new_x = vec_x * self.cos_table[token_positions,k] - vec_y * self.sin_table[token_positions,k]
-            new_y = vec_y * self.cos_table[token_positions,k] + vec_x * self.sin_table[token_positions,k]
+            cos = self.cos_table[token_positions, k].unsqueeze(-2)
+            sin = self.sin_table[token_positions, k].unsqueeze(-2)
+            new_x = vec_x * cos - vec_y * sin
+            new_y = vec_y * cos + vec_x * sin
 
             out[...,2 * k] = new_x
             out[...,2 * k + 1] = new_y

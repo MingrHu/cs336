@@ -163,4 +163,5 @@ cython_debug/
 *.zip
 /Assignment-1/data
 /Assignment-1/output
+/Assignment-1/cs336_basics/local_test/wandb
 /wandb

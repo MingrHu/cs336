@@ -16,11 +16,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description = "Start to train a MR-Transformer-LM")
 
     # MR-Transformer-LM模型参数
-    parser.add_argument("--d_model", type = int, default = 1024)
-    parser.add_argument("--num_heads", type = int, default = 8)
-    parser.add_argument("--num_layers", type = int, default = 16)
-    parser.add_argument("--d_ff", type = int, default = 128)
-    parser.add_argument("--context_length", type = int, default = 16)
+    parser.add_argument("--d_model", type = int, default = 512)
+    parser.add_argument("--num_heads", type = int, default = 16)
+    parser.add_argument("--num_layers", type = int, default = 4)
+    parser.add_argument("--d_ff", type = int, default = 1344)
+    parser.add_argument("--context_length", type = int, default = 256)
     parser.add_argument("--vocab_size", type = int, default = 10000)
     parser.add_argument("--rope_theta",type = float,default = 10000.0)
 
@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument("--eps", type = float, default = 1e-8)
 
     # 训练时超参数
-    parser.add_argument("--batch_size", type = int, default = 4)
+    parser.add_argument("--batch_size", type = int, default = 256)
     parser.add_argument("--num_steps", type = int, default = 10000)
 
     # 学习率/梯度相关调度参数
@@ -162,4 +162,5 @@ def data_generator():
 if __name__ == "__main__":
     # # 生成tokenIds
     # tokenizer = tokenizer.MR_tokenizer()
-    data_generator()
+    # data_generator()
+    main()
