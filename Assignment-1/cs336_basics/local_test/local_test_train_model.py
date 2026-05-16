@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--num_heads", type = int, default = 16)
     parser.add_argument("--num_layers", type = int, default = 4)
     parser.add_argument("--d_ff", type = int, default = 1344)
-    parser.add_argument("--context_length", type = int, default = 256)
+    parser.add_argument("--context_length", type = int, default = 1024)
     parser.add_argument("--vocab_size", type = int, default = 10000)
     parser.add_argument("--rope_theta",type = float,default = 10000.0)
 
@@ -32,8 +32,8 @@ def parse_args():
     parser.add_argument("--eps", type = float, default = 1e-8)
 
     # 训练时超参数
-    parser.add_argument("--batch_size", type = int, default = 256)
-    parser.add_argument("--num_steps", type = int, default = 10000)
+    parser.add_argument("--batch_size", type = int, default = 512)
+    parser.add_argument("--num_steps", type = int, default = 625)
 
     # 学习率/梯度相关调度参数
     parser.add_argument("--max_grad_norm", type = float, default = 1.0)
@@ -44,8 +44,8 @@ def parse_args():
 
     # 日志/检查点/评估参数
     parser.add_argument("--log_interval", type = int, default = 10)
-    parser.add_argument("--save_interval", type = int, default = 1000)
-    parser.add_argument("--eval_interval", type = int, default = 500)
+    parser.add_argument("--save_interval", type = int, default = 100)
+    parser.add_argument("--eval_interval", type = int, default = 125)
 
     # 其他参数
     parser.add_argument("--train_data_path", type = str, default = f"{output_dir}/MR_train.npy")

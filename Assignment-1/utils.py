@@ -105,7 +105,7 @@ def handle_bpe_func(input_path:str,start:int,end:int,sp_tokens:list[str],q:multi
 
 
 #####################Tokenizer multiple process#####################
-def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[bytes,int],max_level:int)->list[int]:
+def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[bytes,int],max_len:int)->list[int]:
     tokens:list[bytes] = []
     parts:list[str] = []
     sp_tokens:list[str] = sorted(special_tokens,key = len,reverse=True)
@@ -139,6 +139,7 @@ def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[byte
             continue
         text_bytes = tuple(bytes([b]) for b in token)
         while True:
+            max_level = max_len 
             merge_rule:bytes = b""
             for idx in range(len(text_bytes) - 1):
                 pair = text_bytes[idx] + text_bytes[idx+1]
