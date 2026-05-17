@@ -165,9 +165,9 @@ def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[byte
     return ret
 
 def handle_tokenizer_func(input_path:str,start:int,end:int,sp_tokens:list[str],
-                          dic_token_id:dict[bytes,int],vocab:dict[int,bytes],q:multiprocessing.Queue,chunk_idx:int):
+                          dic_token_id:dict[bytes,int],vocab_size:int,q:multiprocessing.Queue,chunk_idx:int):
     with open(input_path,'rb') as f:
         f.seek(start)
         data = f.read(end - start)
         chunk = data.decode("utf-8", errors = "ignore")
-        q.put((chunk_idx,exec_tokenizer_func(sp_tokens,chunk,dic_token_id,len(vocab))))
+        q.put((chunk_idx,exec_tokenizer_func(sp_tokens,chunk,dic_token_id,vocab_size)))

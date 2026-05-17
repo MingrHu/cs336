@@ -45,7 +45,7 @@ def parse_args():
     # 日志/检查点/评估参数
     parser.add_argument("--log_interval", type = int, default = 10)
     parser.add_argument("--save_interval", type = int, default = 500)
-    parser.add_argument("--eval_interval", type = int, default = 1000)
+    parser.add_argument("--eval_interval", type = int, default = 500)
 
     # 其他参数
     parser.add_argument("--train_data_path", type = str, default = f"{output_dir}/MR_train.npy")
@@ -163,5 +163,5 @@ def data_generator():
 if __name__ == "__main__":
     # # 生成tokenIds
     # tokenizer = tokenizer.MR_tokenizer()
-    # data_generator()
-    main()
+    data_generator()
+    # main()
