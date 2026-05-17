@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-
+import wandb
 from ml_utils import(create_regression_data,r2_score,std_scaler_mat,re_std_scaler)
 from typing import Any
 
@@ -76,6 +76,7 @@ class MR_MLP:
 
 
 def train_model(model:MR_MLP,X:np.ndarray,Y:np.ndarray,epochs:int)->MR_MLP:
+    wandb.init(project = "cs336-training",name = "mlp-test")
     print("训练开始...")
     
     x_scaled, _, _ = std_scaler_mat(X)
@@ -101,7 +102,9 @@ def train_model(model:MR_MLP,X:np.ndarray,Y:np.ndarray,epochs:int)->MR_MLP:
 
         if epoch % 500 == 0:
             print(f"Epoch {epoch:4d} | Loss: {cur_loss:.4f} | r2:{cur_r2:.4f}")
+            wandb.log({"train_loss": cur_loss}, step = epoch)
 
+    wandb.finish()
     return model
 
 def mlp_liner_test(input_dim = 5,hidden1 = 16,hidden2 = 8,output_dim = 1,lr = 0.01,epochs = 15000):

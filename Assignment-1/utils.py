@@ -170,4 +170,4 @@ def handle_tokenizer_func(input_path:str,start:int,end:int,sp_tokens:list[str],
         f.seek(start)
         data = f.read(end - start)
         chunk = data.decode("utf-8", errors = "ignore")
-        q.put((chunk_idx,exec_tokenizer_func(sp_tokens,chunk,dic_token_id,vocab)))
+        q.put((chunk_idx,exec_tokenizer_func(sp_tokens,chunk,dic_token_id,len(vocab))))
