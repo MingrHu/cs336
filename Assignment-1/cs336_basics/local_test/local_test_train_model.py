@@ -107,6 +107,7 @@ def main():
         start_step = helper.load_checkpoint(args.checkpoint_path, model, optimizer) + 1
     
     # 训练循环
+    model.train()
     for step in range(start_step, args.num_steps):
         # 训练 step
         x, y = helper.data_loading(train_data, args.batch_size, args.context_length, args.device)
@@ -127,6 +128,7 @@ def main():
         
         # 验证
         if step % args.eval_interval == 0:
+            model.eval()
             with torch.no_grad():
                 x_val, y_val = helper.data_loading(val_data, args.batch_size, args.context_length, args.device)
                 logits_val = model(x_val)
@@ -144,14 +146,15 @@ def main():
     wandb.finish()
 
 def data_generator():
-    input_file_path = f"{current_dir}/data/TinyStoriesV2-GPT4-train.txt"
+    input_train_path = f"{current_dir}/data/TinyStoriesV2-GPT4-train.txt"
+    input_val_path = f"{current_dir}/data/TinyStoriesV2-GPT4-valid.txt"
     vocab,merges = bpe.MR_BPE.deserialize(f"{current_dir}/output/tiny_stories_vocab.json", 
                                f"{current_dir}/output/tiny_stories_merges.json")
     tk = tokenizer.MR_Tokenizer(vocab,merges,["<|endoftext|>"])
-    token_id_list = tk._multiple_encode(input_file_path)
+    
+    train_id_list = tk._multiple_encode(input_train_path)
+    val_id_list = tk._multiple_encode(input_val_path)
 
-    train_id_list = token_id_list[:int(len(token_id_list)*0.8)]
-    val_id_list = token_id_list[int(len(token_id_list)*0.8):]
     train_ids_np = np.array(train_id_list, dtype = np.int64)
     val_ids_np = np.array(val_id_list, dtype = np.int64)
 
@@ -163,5 +166,5 @@ def data_generator():
 if __name__ == "__main__":
     # # 生成tokenIds
     # tokenizer = tokenizer.MR_tokenizer()
-    data_generator()
-    # main()
+    # data_generator()
+    main()
