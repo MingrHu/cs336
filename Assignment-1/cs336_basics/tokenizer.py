@@ -4,7 +4,7 @@ import multiprocessing
 from typing import Iterable, Iterator
 from utils import (PAT,
                    find_chunk_boundaries,handle_tokenizer_func,
-                   exec_tokenizer_func)
+                   exec_tokenizer_func,current_dir)
 
 class MR_Tokenizer:
     def __init__(self, vocab:dict[int,bytes], merges:list[tuple[bytes,bytes]], special_tokens:list[str] | None = None):
@@ -19,7 +19,7 @@ class MR_Tokenizer:
         self.merges = merges
         self.dic_token_id:dict[bytes,int] = {}
         if special_tokens != None:
-            self.special_tokens:list[str] = special_tokens
+            self.special_tokens = sorted(special_tokens,key = len,reverse=True) 
         else:
             self.special_tokens:list[str] = []
         # token对id的映射
@@ -90,6 +90,7 @@ class MR_Tokenizer:
 
         with open(input_path, "rb") as f:
             boundaries = find_chunk_boundaries(f,8,[b.encode('utf-8') for b in self.special_tokens])
+            # print(boundaries)
 
         for idx,(start,end) in enumerate(zip(boundaries[:-1],boundaries[1:])):
             p = multiprocessing.Process(

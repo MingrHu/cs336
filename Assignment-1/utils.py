@@ -12,6 +12,8 @@ os.makedirs(output_dir,exist_ok=True)
 
 
 #####################Preprocess#####################
+# 必须输入长度降序排列的special_tokens
+# 该函数只是尽可能的去切 不保证每个区间只有一个特殊token
 def find_chunk_boundaries(
     file: BinaryIO,
     desired_num_chunks: int,
@@ -21,6 +23,8 @@ def find_chunk_boundaries(
     Chunk the file into parts that can be counted independently.
     May return fewer chunks if the boundaries end up overlapping.
     """
+    if not split_special_token or desired_num_chunks <= 1:
+        return [0, file.seek(0, os.SEEK_END)]
 
     # Get total file size in bytes
     file.seek(0, os.SEEK_END)
@@ -35,10 +39,16 @@ def find_chunk_boundaries(
     chunk_boundaries[-1] = file_size
 
     mini_chunk_size = 4096  # Read ahead by 4k bytes at a time
+    max_token_len = len(split_special_token[0])
+    overlap = max_token_len - 1 if max_token_len > 0 else 0
 
     for bi in range(1, len(chunk_boundaries) - 1):
-        initial_position = chunk_boundaries[bi]
+        # 防止正好切到特殊token
+        initial_position = max(0, chunk_boundaries[bi] - overlap)
         file.seek(initial_position)  # Start at boundary guess
+
+        current_pos = initial_position
+        overlap_buffer = b""
         while True:
             mini_chunk = file.read(mini_chunk_size)  # Read a mini chunk
 
@@ -46,19 +56,28 @@ def find_chunk_boundaries(
             if mini_chunk == b"":
                 chunk_boundaries[bi] = file_size
                 break
+
+            search_buffer = overlap_buffer + mini_chunk
             
             found_at = -1
+            matched_len = 0
             # Find the special token in the mini chunk
             # min_pos
             for sp_token in split_special_token:
-                pos = mini_chunk.find(sp_token)
+                pos = search_buffer.find(sp_token)
                 if pos != - 1:
-                    found_at = pos if found_at == -1 or found_at > pos else found_at
+                    if found_at == -1 or pos < found_at or (pos == found_at and len(sp_token) > matched_len):
+                        found_at = pos
+                        matched_len = len(sp_token)
             
+            # 找到了就停
             if found_at != -1:
-                chunk_boundaries[bi] = initial_position + found_at
+                absolute_pos = (current_pos - len(overlap_buffer)) + found_at + matched_len
+                chunk_boundaries[bi] = absolute_pos
                 break
-            initial_position += mini_chunk_size
+
+            overlap_buffer = search_buffer[-overlap:] if overlap > 0 else b""
+            current_pos += len(mini_chunk)
 
     # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
     return sorted(set(chunk_boundaries))
@@ -108,12 +127,13 @@ def handle_bpe_func(input_path:str,start:int,end:int,sp_tokens:list[str],q:multi
 def exec_tokenizer_func(special_tokens:list[str],text:str,dic_token_id:dict[bytes,int],max_len:int)->list[int]:
     tokens:list[bytes] = []
     parts:list[str] = []
-    sp_tokens:list[str] = sorted(special_tokens,key = len,reverse=True)
+    sp_tokens = special_tokens
 
     # 特殊词元列表为空时不应该拆分文本
     if special_tokens != []:
         pattern:str = "|".join(map(re.escape,sp_tokens))
         parts = re.split(f'({pattern})', text) 
+        # 按顺序拿出所有的特殊token
         sp_tokens = re.findall(pattern,text)
     else:
         parts.append(text)
