@@ -122,7 +122,6 @@ class MR_BPE:
             # idx <--> key_tuple idx唯一映射到key_tuple 方便后续根据idx值找对应的key_tuple
             idx_dic[idx] = idx_dic.get(idx,key_tuple)
             idx_count[idx] = idx_count.get(idx,0) + freq
-        rounds = 0
 
         while True:
             # 停止条件
