@@ -123,7 +123,6 @@ def main():
         
         # 记录训练 loss
         if step % args.log_interval == 0:
-            print(f"Step {step}, Train Loss: {loss.item():.4f}")
             wandb.log({"train_loss": loss.item()}, step = step)
         
         # 验证
@@ -132,7 +131,7 @@ def main():
             with torch.no_grad():
                 x_val, y_val = helper.data_loading(val_data, args.batch_size, args.context_length, args.device)
                 logits_val = model(x_val)
-                val_loss = torch.nn.functional.cross_entropy(
+                val_loss = helper.cross_entropy_loss(
                     logits_val.reshape(-1, args.vocab_size), 
                     y_val.reshape(-1))
             

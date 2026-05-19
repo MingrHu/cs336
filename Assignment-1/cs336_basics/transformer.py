@@ -251,7 +251,7 @@ class MR_transformer_block(nn.Module):
         # 生成token_positions
         batch_size = x.shape[0]
         seq_len = x.shape[1]
-        token_positions = torch.arange(seq_len,device = self.device,dtype = self.dtype)
+        token_positions = torch.arange(seq_len,device = x.device,dtype = self.dtype)
         token_positions = token_positions.repeat(batch_size,1)
 
         # 2 MHA
@@ -283,7 +283,7 @@ class MR_transformer_lm(nn.Module):
 
         # 这里用了ModuleList方法
         self.layers = nn.ModuleList([
-            MR_transformer_block(d_model, num_heads, d_ff, context_length, rope_theta)
+            MR_transformer_block(d_model, num_heads, d_ff, context_length, rope_theta,device = device,dtype = dtype)
             for _ in range(num_layers)
         ])
         
