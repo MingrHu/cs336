@@ -144,19 +144,37 @@ class MR_RoPE(nn.Module):
     def forward(self, x: torch.Tensor,token_positions:torch.Tensor) -> torch.Tensor:
 
         # 不能在原始的x上直接改
-        out = x.clone()
-        # TODO 性能问题 后续优化
-        for k in range(0,self.d_k // 2):
-            vec_x = x[...,2 * k]
-            vec_y = x[...,2 * k + 1]
-            # token_pos shape [batch,seq_len]
-            cos = self.cos_table[token_positions, k].unsqueeze(-2)
-            sin = self.sin_table[token_positions, k].unsqueeze(-2)
-            new_x = vec_x * cos - vec_y * sin
-            new_y = vec_y * cos + vec_x * sin
+        # out = x.clone()
+        # # TODO 性能问题 后续优化
+        # for k in range(0,self.d_k // 2):
+        #     vec_x = x[...,2 * k]
+        #     vec_y = x[...,2 * k + 1]
+        #     # token_pos shape [batch,seq_len]
+        #     cos = self.cos_table[token_positions, k].unsqueeze(-2)
+        #     sin = self.sin_table[token_positions, k].unsqueeze(-2)
+        #     new_x = vec_x * cos - vec_y * sin
+        #     new_y = vec_y * cos + vec_x * sin
 
-            out[...,2 * k] = new_x
-            out[...,2 * k + 1] = new_y
+        #     out[...,2 * k] = new_x
+        #     out[...,2 * k + 1] = new_y
+        cos = self.cos_table[token_positions] # [batch, seq_len, d_k // 2]
+        sin = self.sin_table[token_positions]
+
+        x_even = x[..., 0::2]
+        x_odd  = x[..., 1::2]
+
+        # 补维操作
+        while cos.ndim < x_even.ndim:
+            cos = cos.unsqueeze(-3)
+            sin = sin.unsqueeze(-3)
+
+        out_even = x_even * cos - x_odd * sin
+        out_odd  = x_odd * cos  + x_even * sin
+
+        out = torch.empty_like(x)
+        out[..., 0::2] = out_even
+        out[..., 1::2] = out_odd
+
         return out
 
 
