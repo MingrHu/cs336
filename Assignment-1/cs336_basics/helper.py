@@ -45,9 +45,10 @@ def scaled_dot_product_attention(q: torch.Tensor,k: torch.Tensor,v: torch.Tensor
 # @Param target: 目标位置张量
 # @Return: 交叉熵损失
 def cross_entropy_loss(x: torch.Tensor,target: torch.Tensor):
+    target = target.to(device=x.device, dtype=torch.long)
     # (b × s,vocab_size) (b)
     # 分子直接简化
-    tar_x = x[torch.arange(len(target),device = target.device),target] 
+    tar_x = x[torch.arange(len(target), device=x.device), target].unsqueeze(-1)
 
     # 计算对数和 分母
     max_val = torch.max(x,dim = -1,keepdim = True).values
