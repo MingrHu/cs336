@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument("--checkpoint_path", type = str, default = f"{output_dir}/checkpoint.pt")
 
     # W&B
-    parser.add_argument("--wandb_name", type = str, default = "first_test")
+    parser.add_argument("--wandb_name", type = str, default = "second_test_cpu")
     parser.add_argument("--wandb_project", type = str, default="cs336-training")
     return parser.parse_args()
 
