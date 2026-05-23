@@ -77,7 +77,7 @@ class MR_RMSNorm(nn.Module):
         # rmsa按照d_model的列求和做均值
         rmsa = torch.sqrt(x_temp.mean(dim = -1,keepdim= True) + self.eps)
         ret = x / rmsa
-        return ret.to(in_type) * self.weight.T
+        return ret.to(in_type) * self.weight
 
 
 # @Author: MingrHu

@@ -221,22 +221,24 @@ def load_checkpoint(src:str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
 # @Date: 2026-05-14
 # @Description: 模型解码
 # @Param model: 模型
-# @Param prompt_ids: 提示词
+# @Param prompt_ids: 提示词token ID (batch_size,context_length)
 # @Param max_gen_tokens: 最大生成token数
 # @Param eof_token: 结束符token
 # @Param device: CPU/GPU
-# @Param tmp: 温度缩放因子
-# @Param top_p: Top-p采样阈值
+# @Param tmp: 温度缩放因子 越大越随机
+# @Param top_p: Top-p采样阈值 越大越随机 0～1
 # @Return: 生成的token ids
-def lm_decode(model:nn.Module,prompt_ids:torch.Tensor,max_gen_tokens:int,eof_token:int,device = 'cpu',
-              tmp:float|None = None,top_p:float| None = None):
+def lm_decode_stream(model:nn.Module,prompt_ids:torch.Tensor,max_gen_tokens:int,eof_token:int,device = 'cpu',
+              tmp:float|None = None,top_p:float| None = None)->Iterable[int]:
     
     prompt_ids = prompt_ids.to(device)
-    generated_ids = prompt_ids.clone()
+    context_info = prompt_ids.clone()
+    ret = torch.empty(prompt_ids.shape[0],0,dtype = prompt_ids.dtype,device = prompt_ids.device)
+
 
     for _ in range(max_gen_tokens):
         # shape (b,s,vocab_size)
-        logits = model(generated_ids)
+        logits = model(context_info)
         logits = logits[:,-1,:] # (b,s,v)->(b,v)
 
         # 温度缩放
@@ -251,6 +253,8 @@ def lm_decode(model:nn.Module,prompt_ids:torch.Tensor,max_gen_tokens:int,eof_tok
             predix = torch.cumsum(soret,dim = -1)
 
             mask = predix <= top_p
+            # AI修正 需要保留一个超过top-p的token
+            mask[:, 1:] = mask[:, :-1].clone()
             mask[:,0] = True
             
             new_prob = soret * mask.float()
@@ -260,10 +264,10 @@ def lm_decode(model:nn.Module,prompt_ids:torch.Tensor,max_gen_tokens:int,eof_tok
         else:
             next_token_id = torch.multinomial(prob, num_samples = 1)
         # 按照最后一维拼接
-        generated_ids = torch.cat([generated_ids,next_token_id],dim = -1)
+        context_info = torch.cat([context_info,next_token_id],dim = -1)
+        yield int(next_token_id.item())
         
         if eof_token != None and next_token_id.item() == eof_token:
             break
-    return generated_ids
 
 

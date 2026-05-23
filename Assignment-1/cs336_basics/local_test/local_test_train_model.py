@@ -51,7 +51,7 @@ def parse_args():
     parser.add_argument("--train_data_path", type = str, default = f"{output_dir}/MR_train.npy")
     parser.add_argument("--val_data_path", type = str, default = f"{output_dir}/MR_val.npy")
     parser.add_argument("--device", type = str, default = "cpu")
-    parser.add_argument("--checkpoint_path", type = str, default = f"{output_dir}/checkpoint.pt")
+    parser.add_argument("--checkpoint_path", type = str, default = f"{output_dir}/checkpoint_v1.pt")
 
     # W&B
     parser.add_argument("--wandb_name", type = str, default = "second_test_cpu")
@@ -87,6 +87,14 @@ def init_model_and_optimizer(args: argparse.Namespace) -> tuple[nn.Module, torch
     )
     return model, optimizer
 
+# 加载模型
+def load_model_and_weights(checkpoint_path:str)->tuple[nn.Module,torch.optim.Optimizer]:
+    args = parse_args()
+    model, optimizer = init_model_and_optimizer(args)
+    step = helper.load_checkpoint(checkpoint_path, model, optimizer)
+    print(f"Loaded model from step {step}")
+    return model,optimizer
+
 
 def main():
     args = parse_args()
@@ -108,7 +116,7 @@ def main():
     
     # 训练循环
     model.train()
-    for step in range(start_step, args.num_steps):
+    for step in range(start_step + 1, args.num_steps + 1):
         # 训练 step
         x, y = helper.data_loading(train_data, args.batch_size, args.context_length, args.device)
         # 清空梯度
